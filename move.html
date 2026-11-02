@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>SOUMA'S GAME LAB.</title>
+<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0b1020;color:#e8ecff;font:16px/1.7 sans-serif;text-align:center;padding:16px;box-sizing:border-box}</style>
+</head>
+<body>
+<p>セーブデータを引き継いでいます…</p>
+<script>
+// 旧URL（soumakonagai-dev.github.io）の引っ越しページから来たときに、
+// #d= に入っているセーブデータ（旧URLの localStorage）をこのドメインに保存してから、元のページへ移動する。
+//   - こちらにすでにあるデータは上書きしない
+//   - 引き継ぎは1回だけ（sgl-moved-in が付いたら、それ以降は受け取らない）
+//   - 旧URLから来たときだけ受け取る（よそのサイトのリンクで勝手なデータを書きこまれないように）
+(async function () {
+  var OLD = 'https://soumakonagai-dev.github.io';
+  var p = new URLSearchParams(location.hash.slice(1));
+  var to = p.get('to') || '/';
+  if (!/^\/(?![\/\\])/.test(to)) to = '/';
+  history.replaceState(null, '', location.pathname);
+  try {
+    var d = p.get('d');
+    if (d && document.referrer.indexOf(OLD + '/') === 0 && !localStorage.getItem('sgl-moved-in')) {
+      var bin = atob(d.replace(/-/g, '+').replace(/_/g, '/'));
+      var bytes = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      var body = new Blob([bytes]).stream();
+      if (p.get('z') === '1') body = body.pipeThrough(new DecompressionStream('gzip'));
+      var data = JSON.parse(await new Response(body).text());
+      for (var k in data) {
+        if (typeof data[k] === 'string' && localStorage.getItem(k) === null) localStorage.setItem(k, data[k]);
+      }
+      localStorage.setItem('sgl-moved-in', new Date().toISOString());
+    }
+  } catch (e) { console.error('引き継ぎに失敗しました', e); }
+  location.replace(to);
+})();
+</script>
+</body>
+</html>
