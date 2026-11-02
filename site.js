@@ -1,6 +1,6 @@
 // 解説動画・トレーラーの埋め込み（data-yt に YouTube の動画IDを入れると表示される）と、不具合報告フォーム
 (function () {
-  var REPO = 'soumakonagai-dev/soumakonagai-dev.github.io';
+  var REPO = 'soumakonagai-dev/site';
 
   document.querySelectorAll('.video').forEach(function (box) {
     var id = (box.dataset.yt || '').trim(), src = (box.dataset.src || '').trim();
