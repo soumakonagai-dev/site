@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>ツギハギの森</title>
+<style>
+  html,body{margin:0;height:100%;background:#0d1210;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none}
+  #wrap{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
+  canvas{width:min(100vw,calc(100vh*16/9));height:auto;aspect-ratio:16/9;background:#000;display:block}
+  .pad{position:fixed;display:none;gap:6px}
+  .pad button{width:56px;height:56px;border-radius:50%;border:2px solid rgba(255,255,255,.5);background:rgba(255,255,255,.18);color:#fff;font:bold 18px sans-serif;touch-action:none}
+  #dpad{left:14px;bottom:14px;display:none;grid-template-columns:repeat(3,56px);grid-template-rows:repeat(3,56px)}
+  #abtn{right:14px;bottom:14px}
+  @media (pointer:coarse){ #dpad{display:grid} #abtn{display:flex} }
+</style>
+<script src="../../notice.js?v=d6f58c9d"></script></head>
+<body>
+<div id="wrap"><canvas id="c" width="640" height="360"></canvas></div>
+<div class="pad" id="dpad">
+  <span></span><button data-k="up">▲</button><span></span>
+  <button data-k="left">◀</button><span></span><button data-k="right">▶</button>
+  <span></span><button data-k="down">▼</button><span></span>
+</div>
+<div class="pad" id="abtn"><button data-k="cancel">B</button><button data-k="ok">A</button></div>
+<script src="js/data.js?v=d6f58c9d"></script>
+<script src="js/data2.js?v=d6f58c9d"></script>
+<script src="js/data3.js?v=d6f58c9d"></script>
+<script src="js/data4.js?v=d6f58c9d"></script>
+<script src="js/data5.js?v=d6f58c9d"></script>
+<script src="js/data7.js?v=d6f58c9d"></script>
+<script src="js/data6.js?v=d6f58c9d"></script>
+<script src="js/combo.js?v=d6f58c9d"></script>
+<script src="js/challenge.js?v=d6f58c9d"></script>
+<script src="js/core.js?v=d6f58c9d"></script>
+<script src="js/world.js?v=d6f58c9d"></script>
+<script src="js/world2.js?v=d6f58c9d"></script>
+<script src="js/world3.js?v=d6f58c9d"></script>
+<script src="js/draw.js?v=d6f58c9d"></script>
+<script src="js/look.js?v=d6f58c9d"></script>
+<script src="js/look2.js?v=d6f58c9d"></script>
+<script src="js/look3.js?v=d6f58c9d"></script>
+<script src="js/draw3.js?v=d6f58c9d"></script>
+<script src="js/audio.js?v=d6f58c9d"></script>
+<script src="js/ui.js?v=d6f58c9d"></script>
+<script src="js/craft.js?v=d6f58c9d"></script>
+<script src="js/battle.js?v=d6f58c9d"></script>
+<script src="js/field.js?v=d6f58c9d"></script>
+<script src="js/gfx.js?v=d6f58c9d"></script>
+<script src="js/gfx2.js?v=d6f58c9d"></script>
+<script src="js/fx.js?v=d6f58c9d"></script>
+<script src="js/main.js?v=d6f58c9d"></script>
+</body>
+</html>
