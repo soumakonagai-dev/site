@@ -17,7 +17,6 @@ canvas{display:block;touch-action:none}
 #cross:before,#cross:after{content:"";position:absolute;background:#fff;box-shadow:0 0 3px #000}
 #cross:before{left:8px;top:0;width:2px;height:18px;opacity:.8}
 #cross:after{top:8px;left:0;height:2px;width:18px;opacity:.8}
-body:not(.touch) #cross{display:none}
 #prompt{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#000b;padding:7px 16px;border-radius:14px;font-size:15px;font-weight:700;display:none;pointer-events:none}
 #polinfo{position:fixed;left:10px;bottom:10px;width:240px;background:#10151fdd;border-radius:12px;padding:10px;font-size:13px;display:none;pointer-events:none}
 #polinfo .bar{height:10px;background:#0006;border-radius:5px;overflow:hidden;margin:3px 0 6px}
@@ -52,16 +51,16 @@ body.touch #touch{display:block}
 body.touch #help{display:none}
 body.touch #polinfo{bottom:160px}
 </style>
-<script src="../../firebase-config.js?v=da39a3ee"></script><script src="../../notice.js?v=da39a3ee"></script><script src="../../track.js?v=da39a3ee"></script></head>
+<script src="../../guard.js?v=da39a3ee"></script><script src="../../notice.js?v=da39a3ee"></script></head>
 <body>
 <div id="hud"><span id="gold"></span><span id="pickname"></span><span id="bagc"></span><span id="depth"></span><span id="codexc"></span></div>
 <button id="menubtn">メニュー (Tab)</button>
 <div id="cross"></div>
 <div id="prompt"></div>
 <div id="polinfo"></div>
-<div id="help">↑↓ 前後に移動 / ←→ 向き変更 / Space ジャンプ / Shift 走る<br>マウスを画面の端に寄せても向きが変わる<br>マウスで狙って左ボタン長押し：掘る・洗う・磨く<br>右ドラッグ：石を回す・視点を動かす<br>E：話す・開く　R：地上へ戻る　Tab：メニュー</div>
+<div id="help">↑↓ 前後に移動 / ←→ 向き変更 / Space ジャンプ / Shift 走る<br>マウスを動かして向きを変える（Escでカーソル解除）<br>マウスで狙って左ボタン長押し：掘る・洗う・磨く<br>右ドラッグ：石を回す・視点を動かす<br>E：話す・開く　R：地上へ戻る　Tab：メニュー</div>
 <div id="msg"></div>
-<div id="start"><h1>いしみがき</h1><p>クリックで開始<br>穴を下へ掘って石を見つけ、洗って磨いて売ろう<br>↑↓ 前後に移動　←→ 向き変更　マウスを端に寄せても向き変更　左ボタン長押しで作業</p></div>
+<div id="start"><h1>いしみがき</h1><p>クリックで開始<br>穴を下へ掘って石を見つけ、洗って磨いて売ろう<br>↑↓ 前後に移動　←→ 向き変更　マウスを動かして見回す　左ボタン長押しで作業</p></div>
 <div id="menu"><div id="mbox"><div id="mtabs"></div><div id="mbody"></div><div class="row"><span></span><button class="b sub" onclick="G.close()">閉じる (Esc)</button></div></div></div>
 <div id="touch"><div id="joy"><div id="knob"></div></div><div class="tb" id="btnAct">掘る/磨く</div><div class="tb" id="btnJump">ジャンプ</div></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -69,67 +68,63 @@ body.touch #polinfo{bottom:160px}
 (function(){
 'use strict';
 // ===== データ =====
-// fx: 0=ふつう 1=遊色(オパール) 2=光で色が変わる 3=二色(トルマリン) 4=ファイア(ダイヤ)
-// avg=平均の重さ(kg) price=平均の重さで完ぺきに磨く前の基本価格 w=その層での出やすさ
-var STONES=[
- {n:'小石',layer:1,price:2,avg:.8,w:50,col:'#8d8d8d'},
- {n:'川石',layer:1,price:4,avg:.6,w:30,col:'#e8e2d4'},
- {n:'黄鉄鉱',layer:1,price:14,avg:.5,w:14,col:'#d4b030',metal:.85},
- {n:'琥珀',layer:1,price:60,avg:.15,w:6,col:'#e89a18',gem:1},
- {n:'赤めのう',layer:2,price:15,avg:1,w:45,col:'#d2552e'},
- {n:'石英',layer:2,price:20,avg:1.2,w:30,col:'#eef0ff',gem:1},
- {n:'柘榴石',layer:2,price:70,avg:.4,w:17,col:'#9a1a30',gem:1},
- {n:'オパール',layer:2,price:220,avg:.3,w:8,col:'#e8f0ff',gem:1,fx:1,amt:.6},
- {n:'翡翠',layer:3,price:80,avg:.9,w:40,col:'#1f9a62'},
- {n:'紫水晶',layer:3,price:120,avg:1,w:30,col:'#9b4fd6',gem:1},
- {n:'ラピスラズリ',layer:3,price:200,avg:.7,w:20,col:'#1c3a9a'},
- {n:'トルマリン',layer:3,price:450,avg:.4,w:10,col:'#e04a80',gem:1,fx:3,cA:[.92,.25,.5],cB:[.1,.68,.38]},
- {n:'サファイア',layer:4,price:500,avg:.3,w:36,col:'#2457e6',gem:1},
- {n:'ルビー',layer:4,price:650,avg:.3,w:30,col:'#d8143c',gem:1},
- {n:'エメラルド',layer:4,price:1000,avg:.25,w:24,col:'#0aa05a',gem:1},
- {n:'アレキサンドライト',layer:4,price:3500,avg:.15,w:10,col:'#20a070',gem:1,fx:2,cA:[.05,.62,.4],cB:[.7,.1,.32]},
- {n:'ダイヤモンド',layer:5,price:3000,avg:.2,w:50,col:'#e6f6ff',gem:1,fx:4},
- {n:'星の石',layer:5,price:8000,avg:.3,w:25,col:'#ffd84a',gem:1,glow:[1,.7,.15]},
- {n:'ブラックオパール',layer:5,price:15000,avg:.2,w:18,col:'#14181e',gem:1,fx:1,amt:.95},
- {n:'賢者の石',layer:5,price:40000,avg:.1,w:7,col:'#d0302a',gem:1,fx:2,cA:[.85,.1,.12],cB:[1,.78,.2],glow:[1,.3,.1]}];
+// fx: 0=ふつう 1=遊色(オパール) 2=光で色が変わる 3=二色 4=ファイア(ダイヤ)
+// price=平均の重さ・ふつうの品質で完ぺきに磨く前の基本価格 avg=平均の重さ(kg) w=その層での出やすさ
+var STONES=[];
+function ST(layer,n,price,avg,w,col,o){var s={n:n,layer:layer,price:price,avg:avg,w:w,col:col};if(o)for(var k in o)s[k]=o[k];STONES.push(s);}
+ST(1,'小石',2,.8,50,'#8d8d8d');ST(1,'川石',4,.6,30,'#e8e2d4');ST(1,'黄鉄鉱',14,.5,14,'#d4b030',{metal:.85});ST(1,'化石',35,1,9,'#b8a888');ST(1,'琥珀',60,.15,6,'#e89a18',{gem:1});
+ST(2,'赤めのう',15,1,45,'#d2552e');ST(2,'石英',20,1.2,30,'#eef0ff',{gem:1});ST(2,'タイガーアイ',45,.5,18,'#b4801c');ST(2,'柘榴石',70,.4,14,'#9a1a30',{gem:1});ST(2,'オパール',220,.3,7,'#e8f0ff',{gem:1,fx:1,amt:.6});
+ST(3,'翡翠',80,.9,40,'#1f9a62');ST(3,'紫水晶',120,1,30,'#9b4fd6',{gem:1});ST(3,'ターコイズ',160,.5,20,'#3ac0c8');ST(3,'ラピスラズリ',200,.7,16,'#1c3a9a');ST(3,'トルマリン',450,.4,8,'#e04a80',{gem:1,fx:3,cA:[.92,.25,.5],cB:[.1,.68,.38]});
+ST(4,'トパーズ',420,.3,36,'#f0a040',{gem:1});ST(4,'サファイア',500,.3,30,'#2457e6',{gem:1});ST(4,'ルビー',650,.3,24,'#d8143c',{gem:1});ST(4,'エメラルド',1000,.25,18,'#0aa05a',{gem:1});ST(4,'アレキサンドライト',3500,.15,8,'#20a070',{gem:1,fx:2,cA:[.05,.62,.4],cB:[.7,.1,.32]});
+ST(5,'ファイアオパール',6000,.2,30,'#ff6a20',{gem:1,fx:1,amt:.35});ST(5,'ダイヤモンド',3000,.2,40,'#e6f6ff',{gem:1,fx:4});ST(5,'星の石',8000,.3,22,'#ffd84a',{gem:1,glow:[1,.7,.15]});ST(5,'ブラックオパール',15000,.2,16,'#14181e',{gem:1,fx:1,amt:.95});ST(5,'賢者の石',40000,.1,6,'#d0302a',{gem:1,fx:2,cA:[.85,.1,.12],cB:[1,.78,.2],glow:[1,.3,.1]});
+ST(6,'ペリドット',9000,.3,38,'#9ae04a',{gem:1});ST(6,'セレスタイト',12000,.4,30,'#9ad0ff',{gem:1});ST(6,'ムーンストーン',20000,.3,22,'#d8e0ff',{gem:1,fx:1,amt:.25});ST(6,'フローライト',30000,.35,16,'#a070e0',{gem:1,fx:3,cA:[.6,.3,.9],cB:[.2,.9,.7]});ST(6,'パライバトルマリン',60000,.15,7,'#18e0d8',{gem:1,glow:[.1,.9,.8]});
+ST(7,'ブラックダイヤ',70000,.15,36,'#101018',{gem:1,fx:4});ST(7,'ブルーダイヤ',100000,.15,28,'#4aa8ff',{gem:1,fx:4});ST(7,'ピンクダイヤ',150000,.12,20,'#ff8ac0',{gem:1,fx:4});ST(7,'デモンストーン',200000,.2,12,'#7a1ab0',{gem:1,fx:2,cA:[.5,.05,.7],cB:[.05,.7,.9],glow:[.5,.1,.9]});ST(7,'ヴォイドパール',300000,.1,6,'#2a1040',{gem:1,fx:1,amt:.8,glow:[.4,.1,.7]});
+ST(8,'隕鉄',120000,1.5,36,'#8a8a96',{metal:.9});ST(8,'月の欠片',400000,.3,28,'#e8e8f0',{gem:1,glow:[.7,.75,1]});ST(8,'太陽石',700000,.3,20,'#ffb020',{gem:1,glow:[1,.6,.1]});ST(8,'星の涙',1500000,.1,10,'#cfe8ff',{gem:1,fx:4,glow:[.6,.8,1]});ST(8,'世界樹の琥珀',3000000,.1,6,'#e8b020',{gem:1,fx:2,cA:[.9,.6,.1],cB:[.3,.9,.3],glow:[.5,.8,.2]});
+var QUAL=[{n:'傷あり',mul:.5,col:'#d89a8a'},{n:'ふつう',mul:1,col:'#fff'},{n:'美しい',mul:1.7,col:'#8fe0ff'},{n:'極上',mul:3.2,col:'#ffd84a'}];
 var LAYERS=[
- {n:'表土',hp:3,col:'#8a6a48'},{n:'赤土',hp:10,col:'#a8553a'},
- {n:'岩盤',hp:30,col:'#6a6e7a'},{n:'深層',hp:80,col:'#403f66'},
- {n:'マグマ層',hp:200,col:'#6a2a1c'}];
+ {n:'表土',hp:3,col:'#8a6a48'},{n:'赤土',hp:10,col:'#a8553a'},{n:'岩盤',hp:30,col:'#6a6e7a'},{n:'深層',hp:80,col:'#403f66'},
+ {n:'マグマ層',hp:200,col:'#6a2a1c'},{n:'結晶洞',hp:500,col:'#2e5a78'},{n:'深淵',hp:1200,col:'#2a1c40'},{n:'星核',hp:3000,col:'#24344c'}];
 var PICKS=[
  {n:'木のつるはし',cost:0,layer:1,pow:1,col:0x9a6a3a},{n:'石のつるはし',cost:100,layer:2,pow:3,col:0x9a9a9a},
  {n:'鉄のつるはし',cost:800,layer:3,pow:8,col:0xd0d4da},{n:'金のつるはし',cost:6000,layer:4,pow:20,col:0xffc83a},
- {n:'ダイヤのつるはし',cost:40000,layer:5,pow:50,col:0x7fe8ff}];
+ {n:'ダイヤのつるはし',cost:40000,layer:5,pow:50,col:0x7fe8ff},{n:'ミスリルのつるはし',cost:150000,layer:6,pow:120,col:0x9ad8ff},
+ {n:'オリハルコンのつるはし',cost:600000,layer:7,pow:300,col:0xff8a50},{n:'星鋼のつるはし',cost:2500000,layer:8,pow:800,col:0xc8a0ff}];
+var WASHERS=[{n:'スポンジ',cost:0,rate:3,R:1.0},{n:'ブラシ',cost:150,rate:5,R:1.25},{n:'ホース',cost:1500,rate:8,R:1.6},{n:'高圧洗浄機',cost:12000,rate:13,R:2.2}];
 var SHINE_PTS=[[0,1],[25,1.5],[50,2.5],[75,4],[100,6]];
-var SAVE='ishimigaki_demo_v3';
+var SAVE='ishimigaki_demo_v4';
 var UNLOCK_EARNED=300;
-var NV=162; // 石の頂点数
-var LST=[[],[],[],[],[]];STONES.forEach(function(s,i){LST[s.layer-1].push(i);});
+var NV=0; // 石の頂点数（石の形を作ったときに決まる）
+var NL=LAYERS.length;
+var LST=[];for(var li=0;li<NL;li++)LST.push([]);STONES.forEach(function(s,i){LST[s.layer-1].push(i);});
 
 // ===== 状態 =====
-var S={gold:0,earned:0,pick:0,cloth:0,bag:0,stones:[],bench:0,codex:{},nid:1,mined:[],reqs:[],reqOn:false,rid:1,best:0};
+var S={gold:0,earned:0,pick:0,cloth:0,wash:0,bag:0,stones:[],bench:0,wid:0,codex:{},nid:1,oresDone:{},terr:null,reqs:[],reqOn:false,rid:1,best:0};
 try{var o=JSON.parse(localStorage.getItem(SAVE));if(o)for(var k in o)S[k]=o[k];}catch(e){}
-S.stones.forEach(function(s){if(!s.d)s.d=new Array(s.p.length).fill(s.p.some(function(v){return v>0;})?0:1);});
+S.stones.forEach(function(s){if(s.q==null)s.q=1;});
+var terrDirty=false;
 function save(){try{
  var c={};for(var k in S)c[k]=S[k];
- c.stones=S.stones.map(function(s){return {id:s.id,t:s.t,w:s.w,seed:s.seed,done:s.done,d:s.d.map(function(v){return Math.round(v*100)/100;}),p:s.p.map(function(v){return Math.round(v*100)/100;})};});
+ if(terrDirty){S.terr=Array.prototype.map.call(H,function(v){return Math.round(v*20);});terrDirty=false;}
+ c.terr=S.terr;
+ c.stones=S.stones.map(function(s){return {id:s.id,t:s.t,w:s.w,q:s.q,seed:s.seed,done:s.done,washed:s.washed,d:s.d.map(function(v){return Math.round(v*100)/100;}),p:s.p.map(function(v){return Math.round(v*100)/100;})};});
  localStorage.setItem(SAVE,JSON.stringify(c));}catch(e){}}
 function cap(){return 10+5*S.bag;}
 function mult(sh){for(var i=1;i<SHINE_PTS.length;i++){var a=SHINE_PTS[i-1],b=SHINE_PTS[i];if(sh<=b[0])return a[1]+(b[1]-a[1])*(sh-a[0])/(b[0]-a[0]);}return 6;}
 function stats(st){
- if(st._s)return st._s;var a=0,o=0,n=st.p.length;
- var dd=0;for(var i=0;i<n;i++){a+=Math.min(1,st.p[i]);o+=Math.max(0,st.p[i]-1);dd+=st.d[i];}
+ if(st._s)return st._s;var a=0,o=0,n=st.p.length,dd=0;
+ for(var i=0;i<n;i++){a+=Math.min(1,st.p[i]);o+=Math.max(0,st.p[i]-1);dd+=st.d[i];}
  return (st._s={avg:a/n,over:o/n,dirt:dd/n});}
 function ratio(st){return st.w/STONES[st.t].avg;} // 平均の重さとの比＝重さの倍率
 function value(st){var s=stats(st),d=STONES[st.t];
- return Math.max(1,Math.round(d.price*ratio(st)*mult(s.avg*100)*Math.max(.15,1-3*s.over)));}
+ return Math.max(1,Math.round(d.price*ratio(st)*QUAL[st.q].mul*mult(s.avg*100)*Math.max(.15,1-3*s.over)));}
 function canSell(st){return stats(st).dirt<=.5;} // 汚れが半分以下まで落ちていないと売れない
 function fmt(n){return n.toLocaleString('ja-JP');}
 function kg(st){return st.w.toFixed(2)+'kg';}
-function sname(s){return STONES[s.t].n+' '+kg(s);}
+function sname(s){return (s.q!==1?'['+QUAL[s.q].n+'] ':'')+STONES[s.t].n+' '+kg(s);}
 function gauss(){return Math.sqrt(-2*Math.log(1-Math.random()))*Math.cos(2*Math.PI*Math.random());}
 function randW(t){var a=STONES[t].avg;return Math.round(a*Math.min(3.2,Math.max(.35,Math.exp(gauss()*.4)))*100)/100;}
-function benchStone(){for(var i=0;i<S.stones.length;i++)if(S.stones[i].id===S.bench)return S.stones[i];return null;}
+function randQ(){var r=Math.random();return r<.2?0:r<.75?1:r<.95?2:3;}
+function stOf(k){var id=k==='polish'?S.bench:S.wid;for(var i=0;i<S.stones.length;i++)if(S.stones[i].id===id)return S.stones[i];return null;}
 
 // ===== 音 =====
 var AC=null,lastSnd=0;
@@ -148,7 +143,8 @@ var snd={
  buy:function(){tone(500,.1,'triangle',.15);setTimeout(function(){tone(750,.2,'triangle',.15);},90);},
  req:function(){tone(660,.15,'sine',.12);setTimeout(function(){tone(990,.3,'sine',.12);},140);},
  step:function(){tone(70+Math.random()*30,.06,'triangle',.07,40);},
- wash:function(){var n=performance.now();if(n-lastSnd<70)return;lastSnd=n;tone(500+Math.random()*400,.05,'sawtooth',.03,300);}
+ wash:function(){var n=performance.now();if(n-lastSnd<70)return;lastSnd=n;tone(500+Math.random()*400,.05,'sawtooth',.03,300);},
+ dig:function(){tone(110,.14,'sawtooth',.12,50);}
 };
 
 // ===== 3D 基本 =====
@@ -175,9 +171,8 @@ var camera=new THREE.PerspectiveCamera(70,1,.05,300);camera.rotation.order='YXZ'
 var hemi=new THREE.HemisphereLight(0xcfe0ff,0x665544,.4);scene.add(hemi);
 var sun=new THREE.DirectionalLight(0xfff2dc,1.15);sun.position.set(30,50,20);scene.add(sun);scene.add(sun.target);
 sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);
-(function(){var c=sun.shadow.camera;c.left=-34;c.right=34;c.top=34;c.bottom=-34;c.near=1;c.far=150;c.updateProjectionMatrix();sun.shadow.bias=-.0004;sun.shadow.normalBias=.03;})();
+(function(){var c=sun.shadow.camera;c.left=-34;c.right=34;c.top=34;c.bottom=-34;c.near=1;c.far=160;c.updateProjectionMatrix();sun.shadow.bias=-.0004;sun.shadow.normalBias=.04;})();
 var lamp=new THREE.PointLight(0xffd9a0,.9,14);camera.add(lamp);
-// 空
 var skyM=new THREE.ShaderMaterial({side:THREE.BackSide,depthWrite:false,fog:false,uniforms:{top:{value:TOPC.clone()},bot:{value:HORIZ.clone()}},
  vertexShader:'varying float vH;void main(){vH=normalize(position).y;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
  fragmentShader:'uniform vec3 top;uniform vec3 bot;varying float vH;void main(){gl_FragColor=vec4(mix(bot,top,pow(clamp(vH,0.,1.),.55)),1.);}'});
@@ -191,6 +186,7 @@ function label(text,x,y,z,w,parent){
  g.fillStyle='#ffe2a8';g.font='bold 56px sans-serif';g.textAlign='center';g.textBaseline='middle';g.fillText(text,256,68);
  var t=new THREE.CanvasTexture(c);t.encoding=THREE.sRGBEncoding;t.anisotropy=4;
  var m=new THREE.Mesh(new THREE.PlaneGeometry(w,w/4),new THREE.MeshBasicMaterial({map:t}));m.position.set(x,y,z);(parent||scene).add(m);return m;}
+function rng(seed){var s=seed>>>0||1;return function(){s=(s*1664525+1013904223)>>>0;return s/4294967296;};}
 
 // ===== テクスチャ（つなぎ目のないノイズ） =====
 function hash(x,y,s){var n=Math.sin(x*127.1+y*311.7+s*74.7)*43758.5453;return n-Math.floor(n);}
@@ -211,123 +207,286 @@ function makeTex(size,lo,hi,seed,tint,edge,rep){
  var t=new THREE.CanvasTexture(c);t.encoding=THREE.sRGBEncoding;t.anisotropy=8;
  if(rep){t.wrapS=t.wrapT=THREE.RepeatWrapping;}
  return t;}
+function makeGrass(size){
+ var c=document.createElement('canvas');c.width=c.height=size;var g=c.getContext('2d');
+ g.fillStyle='#4a7a30';g.fillRect(0,0,size,size);
+ for(var i=0;i<46;i++){g.fillStyle='rgba('+(80+Math.random()*30|0)+','+(105+Math.random()*30|0)+',40,.22)';var x=Math.random()*size,y=Math.random()*size,r=10+Math.random()*30;
+  for(var ox=-size;ox<=size;ox+=size)for(var oy=-size;oy<=size;oy+=size){g.beginPath();g.arc(x+ox,y+oy,r,0,7);g.fill();}}
+ var pal=['#2f5a20','#3a6b24','#4f8a2f','#6aa23c','#86b94a','#9bc25a','#5c9533','#27501c'];
+ for(var i=0;i<7000;i++){
+  var x=Math.random()*size,y=Math.random()*size,l=5+Math.random()*11,a=(Math.random()-.5)*.8;
+  g.strokeStyle=pal[Math.random()*pal.length|0];g.lineWidth=.8+Math.random()*.9;
+  for(var ox=-size;ox<=size;ox+=size)for(var oy=-size;oy<=size;oy+=size){g.beginPath();g.moveTo(x+ox,y+oy);g.lineTo(x+ox+Math.sin(a)*l,y+oy-Math.cos(a)*l);g.stroke();}}
+ var t=new THREE.CanvasTexture(c);t.encoding=THREE.sRGBEncoding;t.anisotropy=8;t.wrapS=t.wrapT=THREE.RepeatWrapping;return t;}
+function makeWood(size){
+ var c=document.createElement('canvas');c.width=c.height=size;var g=c.getContext('2d'),im=g.createImageData(size,size),pl=size/4;
+ for(var y=0;y<size;y++){var pi=Math.floor(y/pl),off=hash(pi,3,1)*40,dark=.85+hash(pi,7,2)*.3;
+  for(var x=0;x<size;x++){
+   var n=pnoise(x/size*2+off,y/size*40,64,5)*.55+pnoise(x/size*6+off,y/size*110,128,6)*.45;
+   var ring=.5+.5*Math.sin((n*14+y/size*9+off)*2);
+   var v=(95+ring*70+n*40)*dark*((y%pl)<2?.45:1),i=(y*size+x)*4;
+   im.data[i]=Math.min(255,v*1.12);im.data[i+1]=Math.min(255,v*.9);im.data[i+2]=Math.min(255,v*.68);im.data[i+3]=255;}}
+ g.putImageData(im,0,0);
+ var t=new THREE.CanvasTexture(c);t.encoding=THREE.sRGBEncoding;t.anisotropy=8;t.wrapS=t.wrapT=THREE.RepeatWrapping;return t;}
+var rockTex=makeTex(128,120,255,3,[1,1,1],false,true);
+var grassTex=makeGrass(256);
+var woodTex=makeWood(256);
+function wood(c,r){return new THREE.MeshStandardMaterial({color:c,map:woodTex,bumpMap:woodTex,bumpScale:.6,roughness:r==null?.8:r,envMapIntensity:.2});}
+function wbox(w,h,d,x,y,z,m,parent){ // 木目の向きがそろうよう、面の大きさに合わせてUVをのばす
+ var g=new THREE.BoxGeometry(w,h,d),uv=g.attributes.uv,dim=[[d,h],[d,h],[w,d],[w,d],[w,h],[w,h]];
+ for(var i=0;i<uv.count;i++){var f=Math.floor(i/4);uv.setXY(i,uv.getX(i)*dim[f][0]/1.6,uv.getY(i)*dim[f][1]/1.6);}
+ var b=new THREE.Mesh(g,m);b.position.set(x,y,z);b.castShadow=b.receiveShadow=true;(parent||scene).add(b);return b;}
 
-// ===== 世界 =====
-var PW=13,PD=30,X0=-6.5,Z0=-22.5,LD=6; // 穴の幅・深さ・左上、1層の厚さ
-var rockTex=makeTex(128,120,255,3,[1,1,1],true,false);
-var grassTex=makeTex(128,110,255,8,[.42,.62,.3],false,true);
-var groundM=new THREE.MeshStandardMaterial({color:0xffffff,map:grassTex,bumpMap:grassTex,bumpScale:.6,roughness:1,envMapIntensity:.1});
-var rockM=new THREE.MeshStandardMaterial({color:0x6a6460,map:rockTex,bumpMap:rockTex,bumpScale:.8,roughness:1,envMapIntensity:.1});
+// ===== 地面と、へこんでいく採掘場（高さの地形） =====
+var NX=72,CELL=.5,NV1=NX+1,X0=-18,Z0=-44,SZ=NX*CELL,PD=40,LD=5,SLOPE=2.3; // 36m四方を掘れる。1層=5m、深さ最大40m
+var groundM=new THREE.MeshStandardMaterial({color:0xffffff,map:grassTex,bumpMap:grassTex,bumpScale:1.4,roughness:1,envMapIntensity:.08});
 function groundBox(w,d,x,z){
  var g=new THREE.BoxGeometry(w,1,d),uv=g.attributes.uv;
  for(var i=0;i<uv.count;i++)uv.setXY(i,uv.getX(i)*w/5,uv.getY(i)*d/5);
  var m=new THREE.Mesh(g,groundM);m.position.set(x,-.5,z);m.receiveShadow=true;scene.add(m);}
-// 地面（穴の部分をくりぬく）
-groundBox(53.5,120,-33.25,0);groundBox(53.5,120,33.25,0);groundBox(13,69.5,0,25.25);groundBox(13,37.5,0,-41.25);
-// 穴の壁と底
-box(1,30,15,-7,-16,-16,rockM);box(1,30,15,7,-16,-16,rockM);box(13,30,1,0,-16,-9,rockM);box(13,30,1,0,-16,-23,rockM);
-box(15,1,15,0,-30.5,-16,mat(0x1c1c20));
+groundBox(42,120,-39,0);groundBox(42,120,39,0);groundBox(36,68,0,26);groundBox(36,16,0,-52);
 
-// ブロック（掘れる土）
-var NB=PW*PW*PD;
-var grid=new Uint8Array(NB),oreT=new Uint8Array(NB),hpA=new Float32Array(NB),cr=new Int32Array(NB).fill(-1);
-function gi(x,d,z){return (d*PW+z)*PW+x;}
-function rng(seed){var s=seed>>>0||1;return function(){s=(s*1664525+1013904223)>>>0;return s/4294967296;};}
-var CRY=[]; // 鉱石の結晶（ブロックの面にはりつく）{i,x,y,z,s,rx,ry,rz}
+var H=new Float32Array(NV1*NV1),PED=new Float32Array(NV1*NV1).fill(-1e9);
+if(S.terr&&S.terr.length===H.length)for(var hk=0;hk<H.length;hk++)H[hk]=S.terr[hk]/20;
+function heightAt(x,z){
+ var fx=(x-X0)/CELL,fz=(z-Z0)/CELL;if(fx<0||fz<0||fx>=NX||fz>=NX)return 0;
+ var i=Math.floor(fx),j=Math.floor(fz),u=fx-i,v=fz-j,k=j*NV1+i;
+ return (H[k]*(1-u)+H[k+1]*u)*(1-v)+(H[k+NV1]*(1-u)+H[k+NV1+1]*u)*v;}
+function minH(i,j){return -Math.min(PD,SLOPE*Math.min(i,j,NX-i,NX-j)*CELL);}
+var LRGB=LAYERS.map(function(L){return new THREE.Color(L.col);});
+var terrGeo=new THREE.BufferGeometry(),tPos=new Float32Array(NV1*NV1*3),tUv=new Float32Array(NV1*NV1*2),tCol=new Float32Array(NV1*NV1*3),tDug=new Float32Array(NV1*NV1);
 (function(){
- var r=rng(777),FN=[[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
- for(var d=0;d<PD;d++){var l=Math.floor(d/LD),L=LAYERS[l],list=LST[l],tw=0;list.forEach(function(t){tw+=STONES[t].w;});
-  for(var z=0;z<PW;z++)for(var x=0;x<PW;x++){
-   var i=gi(x,d,z),ore=r()<.14;grid[i]=ore?2:1;
-   hpA[i]=ore?L.hp:Math.ceil(L.hp*.34);
-   if(ore){
-    var q=r()*tw,t=list[list.length-1];for(var k=0;k<list.length;k++){q-=STONES[list[k]].w;if(q<=0){t=list[k];break;}}
-    oreT[i]=t;cr[i]=CRY.length;
-    for(var f=0;f<6;f++){var n=FN[f];
-     for(var c=0;c<2;c++){
-      var a=(r()-.5)*.6,b=(r()-.5)*.6,px=n[0]?n[0]*.5:(n[1]?a:a),py=n[1]?n[1]*.5:b,pz=n[2]?n[2]*.5:(n[1]?b:b);
-      if(n[0]){px=n[0]*.5;py=a;pz=b;}else if(n[1]){px=a;py=n[1]*.5;pz=b;}else{px=a;py=b;pz=n[2]*.5;}
-      CRY.push({i:i,x:X0+x+.5+px,y:-d-.5+py,z:Z0+z+.5+pz,s:.09+r()*.11,rx:r()*6,ry:r()*6,rz:r()*6,sy:1+r()*1.2});}}}
-  }}
+ for(var j=0;j<NV1;j++)for(var i=0;i<NV1;i++){var k=j*NV1+i;tPos[k*3]=X0+i*CELL;tPos[k*3+2]=Z0+j*CELL;tUv[k*2]=(X0+i*CELL)/4;tUv[k*2+1]=(Z0+j*CELL)/4;}
+ var idx=new Uint16Array(NX*NX*6),n=0;
+ for(var j=0;j<NX;j++)for(var i=0;i<NX;i++){var a=j*NV1+i,b=a+1,c=a+NV1,d=c+1;idx[n++]=a;idx[n++]=c;idx[n++]=b;idx[n++]=b;idx[n++]=c;idx[n++]=d;}
+ terrGeo.setIndex(new THREE.BufferAttribute(idx,1));
+ terrGeo.setAttribute('position',new THREE.BufferAttribute(tPos,3));terrGeo.setAttribute('uv',new THREE.BufferAttribute(tUv,2));
+ terrGeo.setAttribute('color',new THREE.BufferAttribute(tCol,3));terrGeo.setAttribute('aDug',new THREE.BufferAttribute(tDug,1));
 })();
-var blocks=new THREE.InstancedMesh(new THREE.BoxGeometry(1,1,1),new THREE.MeshStandardMaterial({color:0xffffff,map:rockTex,bumpMap:rockTex,bumpScale:1,roughness:.95,envMapIntensity:.15}),NB);
-blocks.frustumCulled=false;blocks.castShadow=blocks.receiveShadow=true;scene.add(blocks);
-var crys=new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1,0),new THREE.MeshPhysicalMaterial({color:0xffffff,roughness:.18,metalness:.12,flatShading:true,envMapIntensity:1.4}),CRY.length);
-crys.frustumCulled=false;scene.add(crys);
-var _m=new THREE.Matrix4(),_c=new THREE.Color(),_z=new THREE.Matrix4().makeScale(0,0,0),_q=new THREE.Quaternion(),_e=new THREE.Euler(),_p=new THREE.Vector3(),_s=new THREE.Vector3();
-function maxHp(i){var l=Math.floor(Math.floor(i/(PW*PW))/LD);return grid[i]===2?LAYERS[l].hp:Math.ceil(LAYERS[l].hp*.34);}
-function blockColor(i){
- var d=Math.floor(i/(PW*PW)),L=LAYERS[Math.floor(d/LD)];
- _c.set(L.col);if(grid[i]===2)_c.multiplyScalar(.85);
- var h=((i*2654435761)>>>0)/4294967296;_c.multiplyScalar(.8+h*.3);
- _c.multiplyScalar(.55+.45*Math.max(0,hpA[i])/maxHp(i));
- return _c;}
-(function(){
- for(var i=0;i<NB;i++){
-  var d=Math.floor(i/(PW*PW)),r=i%(PW*PW),z=Math.floor(r/PW),x=r%PW;
-  _m.makeTranslation(X0+x+.5,-d-.5,Z0+z+.5);blocks.setMatrixAt(i,_m);blocks.setColorAt(i,blockColor(i));}
- CRY.forEach(function(c,k){
-  _e.set(c.rx,c.ry,c.rz);_q.setFromEuler(_e);_p.set(c.x,c.y,c.z);_s.set(c.s,c.s*c.sy,c.s);
-  _m.compose(_p,_q,_s);crys.setMatrixAt(k,_m);crys.setColorAt(k,_c.set(STONES[oreT[c.i]].col));});
- S.mined.forEach(function(i){grid[i]=0;blocks.setMatrixAt(i,_z);hideCrystals(i);});
- blocks.instanceMatrix.needsUpdate=true;blocks.instanceColor.needsUpdate=true;
- crys.instanceMatrix.needsUpdate=true;crys.instanceColor.needsUpdate=true;
-})();
-function hideCrystals(i){if(cr[i]<0)return;for(var k=cr[i];k<cr[i]+12;k++)crys.setMatrixAt(k,_z);crys.instanceMatrix.needsUpdate=true;}
-function blockCenter(i,out){var d=Math.floor(i/(PW*PW)),r=i%(PW*PW);return out.set(X0+r%PW+.5,-d-.5,Z0+Math.floor(r/PW)+.5);}
+var _c=new THREE.Color(),_c2=new THREE.Color();
+function updateTerrain(){
+ for(var j=0;j<NV1;j++)for(var i=0;i<NV1;i++){
+  var k=j*NV1+i,h=H[k],d=-h;tPos[k*3+1]=h;
+  if(d<.04){tCol[k*3]=tCol[k*3+1]=tCol[k*3+2]=1;tDug[k]=0;continue;}
+  var dug=Math.min(1,d/.7),l=Math.min(NL-1,Math.floor(d/LD)),f=(d-l*LD)/LD;
+  _c.copy(LRGB[l]);if(l<NL-1&&f>.82){var s=(f-.82)/.18;_c.lerp(LRGB[l+1],s*s*(3-2*s));}
+  _c.multiplyScalar(.82+.3*hash(i,j,3));
+  _c.lerp(_c2.setRGB(1,1,1),1-dug);
+  tCol[k*3]=_c.r;tCol[k*3+1]=_c.g;tCol[k*3+2]=_c.b;tDug[k]=dug;}
+ terrGeo.attributes.position.needsUpdate=true;terrGeo.attributes.color.needsUpdate=true;terrGeo.attributes.aDug.needsUpdate=true;
+ terrGeo.computeVertexNormals();terrGeo.computeBoundingSphere();}
+var terrM=new THREE.MeshStandardMaterial({vertexColors:true,map:grassTex,roughness:1,envMapIntensity:.08});
+terrM.onBeforeCompile=function(sh){
+ sh.uniforms.tRock={value:rockTex};
+ sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nattribute float aDug;\nvarying float vDug;\nvarying vec3 vWP;\nvarying vec3 vWN;').replace('#include <begin_vertex>','#include <begin_vertex>\nvDug=aDug;vWP=position;vWN=normal;');
+ sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nvarying float vDug;\nvarying vec3 vWP;\nvarying vec3 vWN;\nuniform sampler2D tRock;')
+  .replace('#include <map_fragment>','vec4 gs=mapTexelToLinear(texture2D(map,vUv));vec3 an=pow(abs(vWN),vec3(4.));an/=(an.x+an.y+an.z);vec3 rx=mapTexelToLinear(texture2D(tRock,vWP.zy*.3)).rgb;vec3 ry=mapTexelToLinear(texture2D(tRock,vWP.xz*.3)).rgb;vec3 rz=mapTexelToLinear(texture2D(tRock,vWP.xy*.3)).rgb;vec3 rs3=rx*an.x+ry*an.y+rz*an.z;diffuseColor*=mix(gs,vec4(rs3,1.),vDug);');};
+var terrain=new THREE.Mesh(terrGeo,terrM);terrain.castShadow=terrain.receiveShadow=true;terrain.frustumCulled=false;scene.add(terrain);
+updateTerrain();
 
-// 看板・建物
-box(.2,3,.2,-2.6,1.5,-8.4,mat(0x6a4a2a));box(.2,3,.2,2.6,1.5,-8.4,mat(0x6a4a2a));
-label('採掘場 ↓ 下へ掘ろう',0,3,-8.3,5.4);
-// 作業台
+// 掘る：ぐるっと丸くへこませ、急すぎる壁はくずれてゆるやかになる
+function dent(px,pz,step){
+ var R=1.5+.6*Math.min(1,step),ci=(px-X0)/CELL,cj=(pz-Z0)/CELL,rr=Math.ceil(R/CELL)+1,q=[];
+ var i0=Math.max(1,Math.floor(ci-rr)),i1=Math.min(NX-1,Math.ceil(ci+rr)),j0=Math.max(1,Math.floor(cj-rr)),j1=Math.min(NX-1,Math.ceil(cj+rr));
+ for(var j=j0;j<=j1;j++)for(var i=i0;i<=i1;i++){
+  var dx=X0+i*CELL-px,dz=Z0+j*CELL-pz,r=Math.sqrt(dx*dx+dz*dz);
+  if(r<R){var f=1-(r/R)*(r/R);f*=f;var k=j*NV1+i,nh=Math.max(H[k]-step*f,minH(i,j),PED[k]);if(nh<H[k]-1e-4){H[k]=nh;q.push(k);}}}
+ var head=0;
+ while(head<q.length){
+  var k=q[head++],ki=k%NV1,kj=(k/NV1)|0;
+  for(var dj=-1;dj<=1;dj++)for(var di=-1;di<=1;di++){
+   if(!di&&!dj)continue;var ni=ki+di,nj=kj+dj;if(ni<1||nj<1||ni>=NX||nj>=NX)continue;
+   var nk=nj*NV1+ni,lim=Math.max(H[k]+SLOPE*(di&&dj?1.4142:1)*CELL,PED[nk]);
+   if(H[nk]>lim+1e-4){H[nk]=lim;q.push(nk);}}}
+ if(q.length){terrDirty=true;updateTerrain();settleOres();}
+ return q.length;}
+function terrainRay(o,d,reach){
+ var step=.1;
+ for(var t=0;t<reach;t+=step){
+  if(o.y+d.y*t<heightAt(o.x+d.x*t,o.z+d.z*t)){
+   var a=Math.max(0,t-step),b=t;
+   for(var k=0;k<6;k++){var m=(a+b)/2;if(o.y+d.y*m<heightAt(o.x+d.x*m,o.z+d.z*m))b=m;else a=m;}
+   return {x:o.x+d.x*b,y:o.y+d.y*b,z:o.z+d.z*b,t:b};}}
+ return null;}
+function inDigField(x,z){return x>X0+.6&&x<X0+SZ-.6&&z>Z0+.6&&z<Z0+SZ-.6;}
+
+// 鉱石（地中にうまっている。地形がさがると結晶がのぞく）
+var ORES=[];
+(function(){
+ var r=rng(777);
+ function add(l,depth,x,z){var list=LST[l],tw=0;list.forEach(function(t){tw+=STONES[t].w;});
+  var q=r()*tw,t=list[list.length-1];for(var k=0;k<list.length;k++){q-=STONES[list[k]].w;if(q<=0){t=list[k];break;}}
+  ORES.push({id:ORES.length,x:x,y:-depth,z:z,t:t,layer:l,hp:LAYERS[l].hp,alive:true});}
+ for(var l=0;l<NL;l++){var n=0,tries=0;
+  while(n<40&&tries<3000){tries++;
+   var depth=l*LD+.5+r()*(LD-1),x=X0+1+r()*(SZ-2),z=Z0+1+r()*(SZ-2),rim=Math.min(x-X0,X0+SZ-x,z-Z0,Z0+SZ-z);
+   if(SLOPE*rim<depth+1.2)continue;add(l,depth,x,z);n++;}}
+ for(var s=0;s<8;s++)add(0,.18+r()*.15,X0+3+r()*(SZ-6),Z0+3+r()*(SZ-6)); // 地面から先っぽが見えるもの
+ ORES.forEach(function(o){if(S.oresDone[o.id])o.alive=false;});
+})();
+var NCR=7,crys=new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1,0),new THREE.MeshPhysicalMaterial({color:0xffffff,roughness:.18,metalness:.12,flatShading:true,envMapIntensity:1.4}),ORES.length*NCR);
+crys.frustumCulled=false;crys.castShadow=true;scene.add(crys);
+var _m=new THREE.Matrix4(),_z=new THREE.Matrix4().makeScale(0,0,0),_q=new THREE.Quaternion(),_e=new THREE.Euler(),_p=new THREE.Vector3(),_s=new THREE.Vector3();
+function placeOre(o){
+ for(var c=0;c<NCR;c++){var d=o.cd[c];_e.set(d.rx,d.ry,d.rz);_q.setFromEuler(_e);_p.set(o.x+d.dx,o.y+d.dy,o.z+d.dz);_s.set(d.s,d.s*d.sy,d.s);
+  _m.compose(_p,_q,_s);crys.setMatrixAt(o.id*NCR+c,o.alive?_m:_z);}
+ crys.instanceMatrix.needsUpdate=true;}
+(function(){
+ var r=rng(31);
+ ORES.forEach(function(o,n){
+  o.cd=[];
+  for(var c=0;c<NCR;c++){var a=r()*6.28,rad=c?.12+r()*.2:0;
+   o.cd.push({dx:Math.cos(a)*rad,dz:Math.sin(a)*rad,dy:-.05+r()*.12,rx:(r()-.5)*.9,ry:r()*6,rz:(r()-.5)*.9,s:.12+r()*.13,sy:1.5+r()*1.3});
+   crys.setColorAt(n*NCR+c,_c.set(STONES[o.t].col));}
+  placeOre(o);});
+ crys.instanceColor.needsUpdate=true;
+})();
+function hideOre(o){placeOre(o);}
+// 地面が鉱石の下までさがったら、鉱石は地面の上へころがり落ちる
+function settleOres(){ORES.forEach(function(o){if(!o.alive)return;var h=heightAt(o.x,o.z);if(h<o.y-.12){o.y=h+.05;placeOre(o);}});}
+settleOres();
+function oreRay(o,d,reach){
+ var best=null,bt=reach;
+ ORES.forEach(function(r){
+  if(!r.alive||heightAt(r.x,r.z)>r.y+.45)return;
+  var ox=r.x-o.x,oy=r.y+.15-o.y,oz=r.z-o.z,b=ox*d.x+oy*d.y+oz*d.z;if(b<0)return;
+  var disc=b*b-(ox*ox+oy*oy+oz*oz-.36);if(disc<0)return;var t=b-Math.sqrt(disc);if(t>=0&&t<bt){bt=t;best=r;}});
+ return best?{ore:best,t:bt}:null;}
+
+// 採掘場のまわりのくい
+(function(){
+ var pm=new THREE.InstancedMesh(new THREE.BoxGeometry(.16,.9,.16),wood(0xb08a58),160),n=0;
+ function post(x,z){_m.makeTranslation(x,.45,z);pm.setMatrixAt(n++,_m);}
+ for(var t=0;t<=SZ;t+=3){post(X0+t,Z0);post(X0+t,Z0+SZ);post(X0,Z0+t);post(X0+SZ,Z0+t);}
+ pm.count=n;pm.castShadow=pm.receiveShadow=true;pm.frustumCulled=false;scene.add(pm);
+})();
+
+// ===== 建物 =====
+wbox(.2,3,.2,-2.6,1.5,-6.6,wood(0xa8844e));wbox(.2,3,.2,2.6,1.5,-6.6,wood(0xa8844e));
+label('採掘場 ↓ 地面を掘ろう',0,3,-6.5,5.4);
+// 洗い場
+var WASHP={x:-9.5,z:-1};
+var wtbl=new THREE.Mesh(new THREE.CylinderGeometry(.85,.7,1,24),wood(0xd8aa78,.65));wtbl.position.set(WASHP.x,.5,WASHP.z);wtbl.castShadow=wtbl.receiveShadow=true;scene.add(wtbl);
+var water=new THREE.Mesh(new THREE.CylinderGeometry(.62,.62,.04,28),new THREE.MeshStandardMaterial({color:0x4aa8e8,transparent:true,opacity:.75,roughness:.08,metalness:.1,envMapIntensity:1}));water.position.set(WASHP.x,1.02,WASHP.z);scene.add(water);
+var wring=new THREE.Mesh(new THREE.TorusGeometry(.64,.06,8,28),wood(0xb88a5a));wring.rotation.x=Math.PI/2;wring.position.set(WASHP.x,1.04,WASHP.z);scene.add(wring);
+wbox(.15,2.6,.15,WASHP.x-1.4,1.3,WASHP.z-1.1,wood(0xa8844e));wbox(.15,2.6,.15,WASHP.x+1.4,1.3,WASHP.z-1.1,wood(0xa8844e));
+label('洗い場',WASHP.x,2.2,WASHP.z-1.1,2.6);
+var wl=new THREE.PointLight(0xdff0ff,.7,7);wl.position.set(WASHP.x+.6,2.6,WASHP.z+.8);scene.add(wl);
+// 磨き台
 var BENCH={x:-4.5,z:-1};
-var tbl=new THREE.Mesh(new THREE.CylinderGeometry(.85,.7,1,24),mat(0x8a5a30,.7));tbl.position.set(BENCH.x,.5,BENCH.z);tbl.castShadow=tbl.receiveShadow=true;scene.add(tbl);
+var tbl=new THREE.Mesh(new THREE.CylinderGeometry(.85,.7,1,24),wood(0xd8aa78,.65));tbl.position.set(BENCH.x,.5,BENCH.z);tbl.castShadow=tbl.receiveShadow=true;scene.add(tbl);
 var pad=new THREE.Mesh(new THREE.CylinderGeometry(.5,.5,.06,24),mat(0x2f5fa0,1));pad.position.set(BENCH.x,1.03,BENCH.z);pad.receiveShadow=true;scene.add(pad);
-box(.15,2.6,.15,BENCH.x-1.4,1.3,BENCH.z-1.1,mat(0x6a4a2a));box(.15,2.6,.15,BENCH.x+1.4,1.3,BENCH.z-1.1,mat(0x6a4a2a));
+wbox(.15,2.6,.15,BENCH.x-1.4,1.3,BENCH.z-1.1,wood(0xa8844e));wbox(.15,2.6,.15,BENCH.x+1.4,1.3,BENCH.z-1.1,wood(0xa8844e));
 label('磨き台',BENCH.x,2.2,BENCH.z-1.1,2.6);
 var bl=new THREE.PointLight(0xfff0d8,.8,7);bl.position.set(BENCH.x+.6,2.6,BENCH.z+.8);scene.add(bl);
 var bl2=new THREE.PointLight(0x9ac0ff,.4,6);bl2.position.set(BENCH.x-1.2,2,BENCH.z+.4);scene.add(bl2);
 // お店
 var SHOP={x:6,z:0};
-box(6,1.3,1.6,SHOP.x,.65,SHOP.z,mat(0x7a4a2a,.7));
+wbox(6,1.3,1.6,SHOP.x,.65,SHOP.z,wood(0xc89060,.7));wbox(6.3,.09,1.9,SHOP.x,1.31,SHOP.z,wood(0xe6bd8c,.55));
+for(var qi=-2;qi<=2;qi+=2)wbox(.14,1.3,1.7,SHOP.x+qi*1.45,.65,SHOP.z,wood(0x8a6238));
 for(var ci=0;ci<7;ci++){var coin=new THREE.Mesh(new THREE.CylinderGeometry(.22,.22,.06,18),new THREE.MeshStandardMaterial({color:0xffc83a,metalness:.9,roughness:.25}));coin.position.set(SHOP.x-1.2+ci*.2,1.34+(ci%3)*.06,SHOP.z+Math.sin(ci)*.3);coin.castShadow=true;scene.add(coin);}
-box(6.4,3.4,.4,SHOP.x,1.7,SHOP.z-1.4,mat(0x5a4636));label('お店・道具屋',SHOP.x,3.8,SHOP.z-1.15,3.6);
+wbox(6.4,3.4,.4,SHOP.x,1.7,SHOP.z-1.4,wood(0xa88460,.85));label('お店・道具屋',SHOP.x,3.8,SHOP.z-1.15,3.6);
 // ジュエリー店（稼ぐと開店）
 var JEW={x:13,z:0};
 var jew=new THREE.Group();scene.add(jew);
-box(5,1.3,1.6,JEW.x,.65,JEW.z,new THREE.MeshStandardMaterial({color:0x6a3a6a,roughness:.5,envMapIntensity:.3}),jew);
-box(5.4,3.6,.4,JEW.x,1.8,JEW.z-1.4,mat(0x4a3550),jew);
+wbox(5,1.3,1.6,JEW.x,.65,JEW.z,wood(0xa86a98,.45),jew);
+wbox(5.4,3.6,.4,JEW.x,1.8,JEW.z-1.4,wood(0x8a6a90,.8),jew);
 box(5.8,.3,2.4,JEW.x,3.7,JEW.z-.6,mat(0xa03a5a),jew);
 label('ジュエリー店',JEW.x,4.4,JEW.z-1.1,3.6,jew);
 for(var ji=0;ji<4;ji++){var gem=new THREE.Mesh(new THREE.OctahedronGeometry(.18),new THREE.MeshStandardMaterial({color:[0xff4060,0x40a0ff,0x60ff90,0xffe060][ji],metalness:.2,roughness:.1}));gem.position.set(JEW.x-.9+ji*.6,1.5,JEW.z);jew.add(gem);}
 jew.visible=false;
-var COLS=[{x0:BENCH.x-.9,x1:BENCH.x+.9,z0:BENCH.z-.9,z1:BENCH.z+.9,h:1.05},{x0:SHOP.x-3,x1:SHOP.x+3,z0:SHOP.z-.8,z1:SHOP.z+.8,h:1.3},{x0:JEW.x-2.5,x1:JEW.x+2.5,z0:JEW.z-.8,z1:JEW.z+.8,h:1.3}];
-// 木と岩
-(function(){var r=rng(5),tm=mat(0x5a3d22),lm=[mat(0x2f6a3a),mat(0x3a7a3e),mat(0x2a5e34)];
- for(var i=0;i<50;i++){var x=(r()-.5)*100,z=(r()-.5)*100;
-  if(Math.abs(x)<20&&z>-32&&z<18)continue;
-  var h=1.6+r()*1.6,tr=new THREE.Mesh(new THREE.CylinderGeometry(.22,.38,h*1.4,7),tm);tr.position.set(x,h*.7,z);tr.castShadow=true;scene.add(tr);
-  for(var k=0;k<3;k++){var lf=new THREE.Mesh(new THREE.ConeGeometry(1.9-k*.5,2.6,8),lm[Math.floor(r()*3)]);lf.position.set(x,h*1.2+k*1.3,z);lf.rotation.y=r()*3;lf.castShadow=true;scene.add(lf);}}
- for(var j=0;j<40;j++){var rx=(r()-.5)*90,rz=(r()-.5)*90;if(Math.abs(rx)<20&&rz>-32&&rz<18)continue;
-  var g=new THREE.IcosahedronGeometry(.4+r()*.7,1),p=g.attributes.position;
-  for(var q=0;q<p.count;q++){var f=.8+hash(Math.round(p.getX(q)*50),Math.round(p.getY(q)*50),j)*.4;p.setXYZ(q,p.getX(q)*f,p.getY(q)*f*.7,p.getZ(q)*f);}
-  var b=new THREE.Mesh(g,new THREE.MeshStandardMaterial({color:0x7a7a74,flatShading:true,roughness:1,envMapIntensity:.1}));b.position.set(rx,.15,rz);b.castShadow=b.receiveShadow=true;scene.add(b);}})();
+var COLS=[{x0:BENCH.x-.9,x1:BENCH.x+.9,z0:BENCH.z-.9,z1:BENCH.z+.9,h:1.05},{x0:WASHP.x-.9,x1:WASHP.x+.9,z0:WASHP.z-.9,z1:WASHP.z+.9,h:1.05},{x0:SHOP.x-3,x1:SHOP.x+3,z0:SHOP.z-.8,z1:SHOP.z+.8,h:1.3},{x0:JEW.x-2.5,x1:JEW.x+2.5,z0:JEW.z-.8,z1:JEW.z+.8,h:1.3}];
+// 木箱と樽
+(function(){
+ var cm=wood(0xc8a070,.85);
+ wbox(.9,.9,.9,SHOP.x-4,.45,SHOP.z+.6,cm);var c2=wbox(.65,.65,.65,SHOP.x-3.95,1.22,SHOP.z+.6,cm);c2.rotation.y=.5;
+ wbox(.8,.8,.8,SHOP.x+4.2,.4,SHOP.z+.2,cm);
+ var bm=wood(0xb88a5a,.8),bar=new THREE.Mesh(new THREE.CylinderGeometry(.42,.38,.95,18),bm);bar.position.set(SHOP.x+3.6,.48,SHOP.z+.9);bar.castShadow=bar.receiveShadow=true;scene.add(bar);
+ [.2,.78].forEach(function(y){var h=new THREE.Mesh(new THREE.TorusGeometry(.41,.025,6,24),new THREE.MeshStandardMaterial({color:0x3a3a40,metalness:.7,roughness:.5}));h.rotation.x=Math.PI/2;h.position.set(SHOP.x+3.6,y,SHOP.z+.9);scene.add(h);});
+ COLS.push({x0:SHOP.x-4.45,x1:SHOP.x-3.55,z0:SHOP.z+.15,z1:SHOP.z+1.05,h:.9},{x0:SHOP.x+3.8,x1:SHOP.x+4.6,z0:SHOP.z-.2,z1:SHOP.z+.6,h:.8},{x0:SHOP.x+3.2,x1:SHOP.x+4,z0:SHOP.z+.5,z1:SHOP.z+1.3,h:.95});
+})();
+// 踏み固めた土の道
+(function(){
+ var dt=makeTex(128,110,255,21,[.62,.46,.3],false,true);dt.repeat.set(8,3);
+ var ac2=document.createElement('canvas');ac2.width=ac2.height=128;var ag=ac2.getContext('2d'),gr=ag.createRadialGradient(64,64,24,64,64,64);gr.addColorStop(0,'#fff');gr.addColorStop(1,'#000');ag.fillStyle=gr;ag.fillRect(0,0,128,128);
+ var d=new THREE.Mesh(new THREE.PlaneGeometry(40,14),new THREE.MeshStandardMaterial({color:0xffffff,map:dt,alphaMap:new THREE.CanvasTexture(ac2),transparent:true,depthWrite:false,roughness:1,envMapIntensity:.05,polygonOffset:true,polygonOffsetFactor:-2}));
+ d.rotation.x=-Math.PI/2;d.position.set(2,.02,0);d.receiveShadow=true;scene.add(d);
+})();
+
+// ===== 森（木をたくさん）と岩 =====
+(function(){
+ var r=rng(5),cl=new THREE.Color();
+ function ok(x,z){
+  if(x>-21&&x<21&&z>-47&&z<-5)return false;
+  if(x>-17&&x<24&&z>-7&&z<7)return false;
+  if(x>-5&&x<5&&z>3&&z<17)return false;
+  return true;}
+ var NC=300,NB=170;
+ function IM(g,m,n){var im=new THREE.InstancedMesh(g,m,n);im.castShadow=im.receiveShadow=true;im.frustumCulled=false;scene.add(im);return im;}
+ var leafM=new THREE.MeshStandardMaterial({color:0xffffff,roughness:1,flatShading:true,envMapIntensity:.1});
+ var trunk=IM(new THREE.CylinderGeometry(.2,.36,1,7),mat(0x5a3d22),NC+NB);
+ var cA=IM(new THREE.ConeGeometry(1,1,8),leafM,NC),cB=IM(new THREE.ConeGeometry(1,1,8),leafM,NC),cC=IM(new THREE.ConeGeometry(1,1,8),leafM,NC);
+ var bA=IM(new THREE.IcosahedronGeometry(1,1),leafM,NB),bB=IM(new THREE.IcosahedronGeometry(1,1),leafM,NB);
+ var mm=new THREE.Matrix4(),q=new THREE.Quaternion(),e=new THREE.Euler(),p=new THREE.Vector3(),sc=new THREE.Vector3();
+ function put(im,i,x,y,z,sx,sy,sz,ry){e.set(0,ry,0);q.setFromEuler(e);p.set(x,y,z);sc.set(sx,sy,sz);mm.compose(p,q,sc);im.setMatrixAt(i,mm);}
+ var n=0;
+ while(n<NC){var x=(r()*2-1)*58,z=(r()*2-1)*58;if(!ok(x,z))continue;
+  var h=2.2+r()*3,s=.8+h*.14,ry=r()*6;
+  put(trunk,n,x,h*.25,z,1,h*.5,1,0);
+  put(cA,n,x,h*.5+h*.28,z,2.1*s,h*.58,2.1*s,ry);put(cB,n,x,h*.5+h*.5,z,1.6*s,h*.5,1.6*s,ry);put(cC,n,x,h*.5+h*.74,z,1.05*s,h*.46,1.05*s,ry);
+  cl.setHSL(.32+r()*.05,.45,.17+r()*.1);cA.setColorAt(n,cl);cB.setColorAt(n,cl);cC.setColorAt(n,cl);n++;}
+ var m2=0;
+ while(m2<NB){var x=(r()*2-1)*58,z=(r()*2-1)*58;if(!ok(x,z))continue;
+  var h=1.5+r()*1.3,s=.9+r()*.7,i=NC+m2;
+  put(trunk,i,x,h/2,z,1.1,h,1.1,0);
+  put(bA,m2,x,h+.9*s,z,1.5*s,1.15*s,1.5*s,r()*6);put(bB,m2,x+.4*s,h+1.4*s,z-.3*s,1.0*s,.85*s,1.0*s,r()*6);
+  if(r()<.18)cl.setHSL(.05+r()*.08,.65,.4+r()*.08);else cl.setHSL(.2+r()*.1,.5,.26+r()*.1);
+  bA.setColorAt(m2,cl);bB.setColorAt(m2,cl);m2++;}
+ [trunk,cA,cB,cC,bA,bB].forEach(function(im){im.instanceMatrix.needsUpdate=true;if(im.instanceColor)im.instanceColor.needsUpdate=true;});
+ trunk.setColorAt(0,cl.set(0xffffff));
+ // 岩
+ for(var j=0;j<44;j++){var rx=(r()*2-1)*58,rz=(r()*2-1)*58;if(!ok(rx,rz))continue;
+  var g=new THREE.IcosahedronGeometry(.4+r()*.8,1),pp=g.attributes.position;
+  for(var qq=0;qq<pp.count;qq++){var f=.8+hash(Math.round(pp.getX(qq)*50),Math.round(pp.getY(qq)*50),j)*.4;pp.setXYZ(qq,pp.getX(qq)*f,pp.getY(qq)*f*.7,pp.getZ(qq)*f);}
+  var b=new THREE.Mesh(g,new THREE.MeshStandardMaterial({color:0x7a7a74,flatShading:true,roughness:1,envMapIntensity:.1}));b.position.set(rx,.15,rz);b.castShadow=b.receiveShadow=true;scene.add(b);}
+})();
+// 草むら（風でゆれる）
+var grassU={uTime:{value:0}};
+(function(){
+ var pos=[],nor=[],r=rng(99);
+ for(var k=0;k<6;k++){var a=r()*6.28,h=.3+r()*.35,bx=Math.cos(a)*.06,bz=Math.sin(a)*.06,lean=(r()-.3)*.9,lx=Math.cos(a+1.5)*lean*h,lz=Math.sin(a+1.5)*lean*h;
+  pos.push(bx-.025*Math.sin(a),0,bz+.025*Math.cos(a), bx+.025*Math.sin(a),0,bz-.025*Math.cos(a), bx+lx,h,bz+lz);nor.push(0,1,0,0,1,0,0,1,0);}
+ var g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setAttribute('normal',new THREE.Float32BufferAttribute(nor,3));
+ var m=new THREE.MeshStandardMaterial({color:0xffffff,side:THREE.DoubleSide,roughness:1,envMapIntensity:.05});
+ m.onBeforeCompile=function(sh){sh.uniforms.uTime=grassU.uTime;
+  sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nuniform float uTime;').replace('#include <begin_vertex>','#include <begin_vertex>\ntransformed.x+=sin(uTime*1.6+instanceMatrix[3].x*.6+instanceMatrix[3].z*.4)*.09*position.y;transformed.z+=cos(uTime*1.3+instanceMatrix[3].z*.5)*.05*position.y;');};
+ var N=16000,im=new THREE.InstancedMesh(g,m,N),mm=new THREE.Matrix4(),q=new THREE.Quaternion(),e=new THREE.Euler(),p=new THREE.Vector3(),sc=new THREE.Vector3(),col=new THREE.Color(),n=0;
+ while(n<N){
+  var R=r()<.7?36:56,x=(r()*2-1)*R,z=(r()*2-1)*R;
+  if(x>-18.6&&x<18.6&&z>-44.6&&z<-7.4)continue;
+  if(x>-13&&x<22&&z>-4.5&&z<3.8)continue;
+  e.set(0,r()*6.28,0);q.setFromEuler(e);p.set(x,0,z);var s2=.6+r()*.6;sc.set(s2,s2*(.7+r()*.4),s2);
+  mm.compose(p,q,sc);im.setMatrixAt(n,mm);im.setColorAt(n,col.setHSL(.2+r()*.09,.5+r()*.25,.2+r()*.18));n++;}
+ im.frustumCulled=false;scene.add(im);
+})();
 
 // ===== 石の形・磨き =====
-function buildStone(seed,gem){
+function buildStone(seed,gem,q){
  var g=new THREE.IcosahedronGeometry(1,2),pos=g.attributes.position,r=rng(seed),map={},u=[];
  var sx=.72+r()*.55,sy=gem?1.35+r()*.6:.7+r()*.6,sz=gem?.65+r()*.4:.7+r()*.6,a=r()*6,b=r()*6,c=r()*6;
+ var jit=q===0?.55:q>=2?.88:1; // 傷ありはゴツゴツ、美しいものは整った形
  for(var i=0;i<pos.count;i++){
   var x=pos.getX(i),y=pos.getY(i),z=pos.getZ(i),key=x.toFixed(3)+','+y.toFixed(3)+','+z.toFixed(3);
   if(map[key]===undefined){
    map[key]=u.length;
-   var lump=1+.24*Math.sin(x*2.3+a)*Math.cos(y*2.1+b)+.16*Math.sin(z*3+c);
-   var f=(gem?.86+r()*.3:.68+r()*.55)*lump;
+   var lump=1+(.24*Math.sin(x*2.3+a)*Math.cos(y*2.1+b)+.16*Math.sin(z*3+c))*(q===0?1.4:q>=2?.6:1);
+   var base=gem?.86+r()*.3:.68+r()*.55,f=(1+(base-1)*jit*(q===0?1.3:1))*lump;
    u.push({idx:[],x:x*f*sx,y:y*f*sy,z:z*f*sz});}
   u[map[key]].idx.push(i);}
  g.setAttribute('aPolish',new THREE.BufferAttribute(new Float32Array(pos.count),1));
  g.setAttribute('aDirt',new THREE.BufferAttribute(new Float32Array(pos.count),1));
  return {geo:g,u:u};}
+var NV=buildStone(1,0,1).u.length;
 function shapeStone(mesh,st){
  var g=mesh.geometry,pos=g.attributes.position,pa=g.attributes.aPolish,da=g.attributes.aDirt,u=mesh.userData.u;
  for(var k=0;k<u.length;k++){
@@ -335,68 +494,75 @@ function shapeStone(mesh,st){
   for(var j=0;j<q.idx.length;j++){var i=q.idx[j];pos.setXYZ(i,q.x*sc,q.y*sc,q.z*sc);pa.setX(i,p);da.setX(i,st.d[k]);}}
  pos.needsUpdate=true;pa.needsUpdate=true;da.needsUpdate=true;}
 function makeStoneMesh(st){
- var d=STONES[st.t],b=buildStone(st.seed,d.gem);
+ var d=STONES[st.t],b=buildStone(st.seed,d.gem,st.q);
  var m=new THREE.MeshPhysicalMaterial({color:d.col,flatShading:true,roughness:1,metalness:d.metal||(d.gem?.12:0),transparent:!!d.gem,opacity:d.gem?.93:1,envMapIntensity:1.1,reflectivity:d.gem?.8:.5});
  if(d.glow){m.emissive.setRGB(d.glow[0],d.glow[1],d.glow[2]);m.emissiveIntensity=.5;}
  var cA=d.cA||[0,0,0],cB=d.cB||[0,0,0];
  m.onBeforeCompile=function(sh){
-  sh.uniforms.uTime={value:0};sh.uniforms.uMode={value:d.fx||0};sh.uniforms.uAmt={value:d.amt||.6};
+  sh.uniforms.uTime={value:0};sh.uniforms.uMode={value:d.fx||0};sh.uniforms.uAmt={value:d.amt||.6};sh.uniforms.uQ={value:st.q-1};
   sh.uniforms.uA=new THREE.Uniform(new THREE.Vector3(cA[0],cA[1],cA[2]));sh.uniforms.uB=new THREE.Uniform(new THREE.Vector3(cB[0],cB[1],cB[2]));
   m.userData.sh=sh;
   sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nattribute float aPolish;\nattribute float aDirt;\nvarying float vPolish;\nvarying float vDirt;\nvarying vec3 vLp;').replace('#include <begin_vertex>','#include <begin_vertex>\nvPolish=aPolish;vDirt=aDirt;vLp=position;');
-  sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nvarying float vPolish;\nvarying float vDirt;\nvarying vec3 vLp;\nfloat h3(vec3 p){return fract(sin(dot(floor(p),vec3(12.9898,78.233,37.719)))*43758.5453);}\nuniform float uTime;uniform float uMode;uniform float uAmt;uniform vec3 uA;uniform vec3 uB;\nvec3 rainbow(float h){return clamp(abs(mod(h*6.+vec3(0.,4.,2.),6.)-3.)-1.,0.,1.);}')
+  sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nvarying float vPolish;\nvarying float vDirt;\nvarying vec3 vLp;\nfloat h3(vec3 p){return fract(sin(dot(floor(p),vec3(12.9898,78.233,37.719)))*43758.5453);}\nuniform float uTime;uniform float uMode;uniform float uAmt;uniform float uQ;uniform vec3 uA;uniform vec3 uB;\nvec3 rainbow(float h){return clamp(abs(mod(h*6.+vec3(0.,4.,2.),6.)-3.)-1.,0.,1.);}')
    .replace('#include <color_fragment>','#include <color_fragment>\nfloat gr=h3(vLp*16.);\nvec3 crust=vec3(0.30,0.27,0.23)*(0.65+0.6*gr)*mix(vec3(1.),diffuseColor.rgb*1.6,0.25);\nfloat pk=clamp(vPolish,0.,1.);\nvec3 bright=diffuseColor.rgb*1.25+0.04;\ndiffuseColor.rgb=mix(crust,bright,smoothstep(.1,.7,pk));\ndiffuseColor.rgb=mix(diffuseColor.rgb,vec3(0.22,0.15,0.12),clamp(vPolish-1.,0.,1.)*0.85);\nvec3 mud=vec3(0.36,0.25,0.15)*(0.75+0.5*h3(vLp*24.+3.));\ndiffuseColor.rgb=mix(diffuseColor.rgb,mud,vDirt*0.96);')
    .replace('#include <roughnessmap_fragment>','#include <roughnessmap_fragment>\nroughnessFactor=mix(1.0,0.03,clamp(vPolish,0.,1.));\nroughnessFactor=mix(roughnessFactor,0.75,clamp(vPolish-1.,0.,1.));\nroughnessFactor=mix(roughnessFactor,1.0,vDirt);')
    .replace('#include <normal_fragment_maps>','#include <normal_fragment_maps>\nfloat pol=clamp(vPolish,0.,1.)*(1.-clamp(vPolish-1.,0.,1.))*(1.-vDirt);\nfloat ndv=clamp(dot(normal,normalize(vViewPosition)),0.,1.);\n'+
     'if(uMode>.5&&uMode<1.5){float h=fract(ndv*1.7+.5*sin(vLp.x*6.+vLp.y*4.)+.4*sin(vLp.z*5.-vLp.x*3.)+uTime*.04);diffuseColor.rgb=mix(diffuseColor.rgb,rainbow(h),uAmt*pol);}\n'+
     'else if(uMode>1.5&&uMode<2.5){float k=smoothstep(.3,.8,ndv+.15*sin(vLp.y*5.));diffuseColor.rgb=mix(diffuseColor.rgb,mix(uA,uB,k),pol);}\n'+
     'else if(uMode>2.5&&uMode<3.5){float k=smoothstep(-.35,.35,vLp.y*1.1+.12*sin(vLp.x*7.));diffuseColor.rgb=mix(diffuseColor.rgb,mix(uA,uB,k),pol);}\n'+
-    'else if(uMode>3.5){float h=fract(ndv*3.+vLp.y*.7);diffuseColor.rgb+=rainbow(h)*pow(1.-ndv,2.)*.55*pol;}')
+    'else if(uMode>3.5){float h=fract(ndv*3.+vLp.y*.7);diffuseColor.rgb+=rainbow(h)*pow(1.-ndv,2.)*.55*pol;}\n'+
+    'if(uQ>.5){float lum=dot(diffuseColor.rgb,vec3(.3,.59,.11));diffuseColor.rgb=mix(vec3(lum),diffuseColor.rgb,1.+.22*uQ)*(1.+.06*uQ);}\n'+
+    'if(uQ<-.5){float cl=abs(sin(dot(vLp,vec3(7.3,5.1,6.2))+3.*h3(floor(vLp*2.))));if(cl<.07)diffuseColor.rgb*=.18;if(h3(vLp*9.+7.)>.93)diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.12,.1,.09),.8);}')
    .replace('#include <emissivemap_fragment>','#include <emissivemap_fragment>\ntotalEmissiveRadiance*=pol*(.55+.45*sin(uTime*2.+vLp.x*6.+vLp.y*4.));');};
  var mesh=new THREE.Mesh(b.geo,m);mesh.userData.u=b.u;mesh.castShadow=mesh.receiveShadow=true;
  if(!st.p||!st.p.length)st.p=new Array(b.u.length).fill(0);
  shapeStone(mesh,st);b.geo.computeBoundingSphere();return mesh;}
 
-var benchMesh=null,benchId=-1;
-function syncBench(){
- var st=benchStone();
- if(!st){if(benchMesh){scene.remove(benchMesh);benchMesh=null;}benchId=-1;return;}
- if(benchId!==st.id){
-  if(benchMesh)scene.remove(benchMesh);
-  var sc=.46*Math.min(1.7,Math.max(.6,Math.cbrt(ratio(st))));
-  benchMesh=makeStoneMesh(st);benchMesh.scale.setScalar(sc);
-  benchMesh.position.set(BENCH.x,1.03+.6*sc*1.4,BENCH.z);scene.add(benchMesh);benchId=st.id;}
+// ===== 洗い場と磨き台（石をのせる場所） =====
+var PL={polish:{x:BENCH.x,z:BENCH.z,mesh:null,id:-1},wash:{x:WASHP.x,z:WASHP.z,mesh:null,id:-1}};
+function syncStation(k){
+ var T=PL[k],st=stOf(k);
+ if(!st){if(T.mesh){scene.remove(T.mesh);T.mesh.geometry.dispose();T.mesh=null;}T.id=-1;return;}
+ if(T.id!==st.id){
+  if(T.mesh){scene.remove(T.mesh);T.mesh.geometry.dispose();}
+  var sc=.3*Math.min(1.5,Math.max(.65,Math.cbrt(ratio(st))));
+  T.mesh=makeStoneMesh(st);T.mesh.scale.setScalar(sc);T.mesh.position.set(T.x,1.05+.6*sc*1.4,T.z);scene.add(T.mesh);T.id=st.id;}
 }
+function syncAll(){syncStation('polish');syncStation('wash');}
+function place(id,k){
+ if(k==='polish'){S.bench=id;if(S.wid===id)S.wid=0;}else{S.wid=id;if(S.bench===id)S.bench=0;}
+ syncAll();}
+function unplace(id){if(S.bench===id)S.bench=0;if(S.wid===id)S.wid=0;syncAll();}
+function nearDirtyUnused(){return null;}
 var lastWarn=0;
-function nearDirt(local,R){var st=benchStone(),u=benchMesh.userData.u,t=0,n=0;
- for(var k=0;k<u.length;k++){var dx=u[k].x-local.x,dy=u[k].y-local.y,dz=u[k].z-local.z;if(Math.sqrt(dx*dx+dy*dy+dz*dz)<R){t+=st.d[k];n++;}}
- return n?t/n:0;}
 function washAt(local,amt,wp){
- var st=benchStone();if(!st||!benchMesh)return;
- var u=benchMesh.userData.u,R=.7,ch=false;
+ var st=stOf('wash'),T=PL.wash;if(!st||!T.mesh)return;
+ var u=T.mesh.userData.u,W=WASHERS[S.wash],R=W.R*T.mesh.geometry.boundingSphere.radius,ch=false;
  for(var k=0;k<u.length;k++){
   var dx=u[k].x-local.x,dy=u[k].y-local.y,dz=u[k].z-local.z,d=Math.sqrt(dx*dx+dy*dy+dz*dz);
-  if(d<R&&st.d[k]>0){st.d[k]=Math.max(0,st.d[k]-amt*(.5+.5*(1-d/R)));ch=true;}}
+  if(st.d[k]>0){st.d[k]=Math.max(0,st.d[k]-amt*(d<R?.5+.5*(1-d/R):.2));ch=true;}}
  if(!ch)return;
- st._s=null;shapeStone(benchMesh,st);snd.wash();burst(wp,0x7fc8ff,2,2);
- if(!st.washed&&stats(st).dirt<.02){st.washed=true;toast('きれいに洗えた！ 次は磨こう');}
+ st._s=null;shapeStone(T.mesh,st);snd.wash();if(Math.random()<.12)burst(wp,0x7fc8ff,1,1);
+ if(!st.washed&&stats(st).dirt<.09){
+  st.washed=true;for(var k2=0;k2<st.d.length;k2++)st.d[k2]=0;st._s=null;shapeStone(T.mesh,st);
+  if(!stOf('polish')){place(st.id,'polish');toast('きれいに洗えた！ 磨き台に運んだよ');}else toast('きれいに洗えた！（かばん画面で磨き台へ）');}
 }
 function polishAt(local,amt){
- var st=benchStone();if(!st||!benchMesh)return;
- var u=benchMesh.userData.u,R=.6,ch=false,ov=false,blocked=false;
+ var st=stOf('polish'),T=PL.polish;if(!st||!T.mesh)return;
+ var u=T.mesh.userData.u,R=.6,ch=false,ov=false,blocked=false;
  for(var k=0;k<u.length;k++){
   var dx=u[k].x-local.x,dy=u[k].y-local.y,dz=u[k].z-local.z,d=Math.sqrt(dx*dx+dy*dy+dz*dz);
   if(d<R){var w=1-d/R,old=st.p[k];if(st.d[k]>.5){blocked=true;continue;}st.p[k]=Math.min(2,old+amt*w*(.4+.6*w)*(1-st.d[k]));ch=true;if(st.p[k]>1.02)ov=true;}}
- if(blocked&&!ch){var nw=performance.now();if(nw-lastWarn>1200){lastWarn=nw;toast('先に洗おう！ 汚れが残っていると磨けない');}}
+ if(blocked&&!ch){var nw=performance.now();if(nw-lastWarn>1200){lastWarn=nw;toast('先に洗い場で洗おう！ 汚れが残っていると磨けない');}}
  if(!ch)return;
- st._s=null;shapeStone(benchMesh,st);
+ st._s=null;shapeStone(T.mesh,st);
  if(ov)snd.over();else snd.shine();
  var s=stats(st);
- if(!st.done&&s.avg>=.97&&s.over<.02){st.done=true;S.codex[st.t]=2;snd.perfect();burst(benchMesh.position,0xffffee,30,5);toast('完ぺき！ ピカピカになった');}
+ if(!st.done&&s.avg>=.97&&s.over<.02){st.done=true;S.codex[st.t]=2;snd.perfect();burst(T.mesh.position,0xffffee,8,3);toast('完ぺき！ ピカピカになった');}
 }
 
 // ===== 演出 =====
-var parts=[],pgeo=new THREE.BoxGeometry(.1,.1,.1),pmats={};
+var parts=[],pgeo=new THREE.BoxGeometry(.065,.065,.065),pmats={};
 function burst(pos,col,n,sp){
  pmats[col]=pmats[col]||new THREE.MeshBasicMaterial({color:col});
  for(var i=0;i<n;i++){var m=new THREE.Mesh(pgeo,pmats[col]);m.position.copy(pos);
@@ -404,105 +570,117 @@ function burst(pos,col,n,sp){
 function popText(t,col,dy){var e=document.createElement('div');e.className='pop';e.textContent=t;e.style.left='50%';e.style.top=(innerHeight/2+(dy||-60))+'px';e.style.color=col||'#fff';document.body.appendChild(e);setTimeout(function(){e.remove();},1100);}
 var msgT=0;
 function toast(t){var e=document.getElementById('msg');e.textContent=t;e.style.opacity=1;clearTimeout(msgT);msgT=setTimeout(function(){e.style.opacity=0;},2200);}
-var hl=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1.01,1.01,1.01)),new THREE.LineBasicMaterial({color:0xffffff}));hl.visible=false;scene.add(hl);
-// 手に持つつるはし・磨き布
-var pickG=new THREE.Group(),pickHead=null,clothM=null;
+var ring=new THREE.Mesh(new THREE.RingGeometry(.92,1,40),new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.55,side:THREE.DoubleSide,depthTest:false}));
+ring.rotation.x=-Math.PI/2;ring.visible=false;ring.renderOrder=5;scene.add(ring);
+// 手に持つ道具（つるはし・磨き布・洗う道具）
+var pickG=new THREE.Group(),pickHead=null,clothM=null,toolWash=[];
 (function(){
  var h=new THREE.Mesh(new THREE.BoxGeometry(.05,.05,.75),mat(0x6a4a2a));pickG.add(h);
  pickHead=new THREE.Mesh(new THREE.BoxGeometry(.4,.07,.07),new THREE.MeshStandardMaterial({color:0xaaaaaa,metalness:.6,roughness:.4}));pickHead.position.z=-.36;pickG.add(pickHead);
  pickG.position.set(.38,-.32,-.55);pickG.rotation.set(.2,-.4,0);camera.add(pickG);
  clothM=new THREE.Mesh(new THREE.BoxGeometry(.25,.05,.25),mat(0x2f5fa0,1));clothM.position.set(.18,-.25,-.5);clothM.rotation.set(.3,0,0);clothM.visible=false;camera.add(clothM);
+ function g(){var G=new THREE.Group();G.position.set(.28,-.27,-.5);G.rotation.set(.15,-.2,0);G.visible=false;camera.add(G);toolWash.push(G);return G;}
+ g().add(new THREE.Mesh(new THREE.BoxGeometry(.2,.1,.15),mat(0xe8d04a,1)));
+ var b=g();b.add(new THREE.Mesh(new THREE.BoxGeometry(.06,.05,.32),wood(0xb88a5a)));var br=new THREE.Mesh(new THREE.BoxGeometry(.2,.05,.1),mat(0x2a2a2a,1));br.position.set(0,-.05,-.2);b.add(br);
+ var c=g(),tube=new THREE.Mesh(new THREE.CylinderGeometry(.03,.03,.5,10),mat(0x2a6ac8,.5));tube.rotation.x=Math.PI/2;c.add(tube);
+ var nz=new THREE.Mesh(new THREE.ConeGeometry(.05,.12,10),mat(0xd0d0d8,.3));nz.rotation.x=-Math.PI/2;nz.position.z=-.3;c.add(nz);
+ var d=g(),body=new THREE.Mesh(new THREE.BoxGeometry(.1,.16,.28),mat(0xe07a20,.5));d.add(body);
+ var barrel=new THREE.Mesh(new THREE.CylinderGeometry(.025,.025,.55,10),mat(0x9aa0a8,.3));barrel.rotation.x=Math.PI/2;barrel.position.z=-.4;d.add(barrel);
 })();
 function tintPick(){pickHead.material.color.setHex(PICKS[S.pick].col);}
+function tintCloth(){clothM.material.color.setHex([0x2f5fa0,0x7a4ac8,0xd8a830][Math.min(2,Math.floor(S.cloth/3))]);}
 var swing=0;
 
 // ===== 掘る =====
-function voxelRay(ox,oy,oz,dx,dy,dz,reach){
- var px=ox-X0,py=-oy,pz=oz-Z0,vx=dx,vy=-dy,vz=dz;
- var ix=Math.floor(px),iy=Math.floor(py),iz=Math.floor(pz);
- var sx=vx>0?1:-1,sy=vy>0?1:-1,sz=vz>0?1:-1;
- var tdx=vx?Math.abs(1/vx):1e9,tdy=vy?Math.abs(1/vy):1e9,tdz=vz?Math.abs(1/vz):1e9;
- var tmx=vx?(vx>0?ix+1-px:px-ix)*tdx:1e9,tmy=vy?(vy>0?iy+1-py:py-iy)*tdy:1e9,tmz=vz?(vz>0?iz+1-pz:pz-iz)*tdz:1e9;
- for(var n=0;n<80;n++){
-  if(ix>=0&&ix<PW&&iy>=0&&iy<PD&&iz>=0&&iz<PW&&grid[gi(ix,iy,iz)])return gi(ix,iy,iz);
-  var t;
-  if(tmx<tmy&&tmx<tmz){t=tmx;tmx+=tdx;ix+=sx;}else if(tmy<tmz){t=tmy;tmy+=tdy;iy+=sy;}else{t=tmz;tmz+=tdz;iz+=sz;}
-  if(t>reach)break;}
- return -1;}
 var lastClang=0,_v=new THREE.Vector3();
-function hitBlock(i){
- var d=Math.floor(i/(PW*PW)),l=Math.floor(d/LD),pk=PICKS[S.pick];
+function layerAtDepth(d){return Math.min(NL-1,Math.max(0,Math.floor((d+.05)/LD)));}
+function digHit(hit){
+ var depth=-heightAt(hit.x,hit.z),l=layerAtDepth(depth),pk=PICKS[S.pick];
+ if(depth>=PD-.3){toast('これ以上は掘れない（いちばん下）');return;}
  if(l+1>pk.layer){var n=performance.now();if(n-lastClang>700){lastClang=n;snd.clang();toast(LAYERS[l].n+'は硬い！ もっと強いつるはしが必要');}return;}
- if(grid[i]===2&&S.stones.length>=cap()){toast('かばんがいっぱい！ 磨いて売ろう（Tab）');snd.clang();return;}
- hpA[i]-=pk.pow;swing=1;snd.hit();
- blockCenter(i,_v);var lc=new THREE.Color(LAYERS[l].col).getHex();burst(_v,lc,4,2.5);
- if(hpA[i]>0){blocks.setColorAt(i,blockColor(i));blocks.instanceColor.needsUpdate=true;return;}
- var ore=grid[i]===2,t=oreT[i];
- grid[i]=0;blocks.setMatrixAt(i,_z);blocks.instanceMatrix.needsUpdate=true;S.mined.push(i);hideCrystals(i);snd.brk();burst(_v,lc,10,4);
- if(ore){
-  var st={id:S.nid++,t:t,w:randW(t),seed:Math.floor(Math.random()*1e6),p:new Array(NV).fill(0),d:new Array(NV).fill(1),done:false};
-  S.stones.push(st);
-  var dd=STONES[t],rt=ratio(st);S.codex[t]=S.codex[t]||1;
-  if(!benchStone())S.bench=st.id;
-  popText((rt>=1.5?'大物！ ':rt<=.6?'小粒 ':'')+dd.n+' '+kg(st)+' ゲット','#'+new THREE.Color(dd.col).getHexString());
-  burst(_v,new THREE.Color(dd.col).getHex(),14,5);
-  S.best=Math.max(S.best,d);syncBench();save();hud();}
+ var step=Math.min(1.6,Math.max(.06,pk.pow/(.34*LAYERS[l].hp)));
+ swing=1;snd.dig();
+ var ch=dent(hit.x,hit.z,step);
+ _v.set(hit.x,hit.y+.1,hit.z);burst(_v,new THREE.Color(LAYERS[l].col).getHex(),2,2);
+ if(ch)S.best=Math.max(S.best,Math.floor(depth));
 }
+function hitOre(o){
+ var pk=PICKS[S.pick];
+ if(o.layer+1>pk.layer){var n=performance.now();if(n-lastClang>700){lastClang=n;snd.clang();toast('この石は硬すぎる！ もっと強いつるはしが必要');}return;}
+ if(S.stones.length>=cap()){toast('かばんがいっぱい！ 売るか、整理しよう（Tab）');snd.clang();return;}
+ o.hp-=pk.pow;swing=1;snd.hit();
+ _v.set(o.x,o.y+.3,o.z);burst(_v,new THREE.Color(STONES[o.t].col).getHex(),2,2);
+ if(o.hp<=0)mineOre(o);
+}
+function mineOre(o){
+ o.alive=false;S.oresDone[o.id]=1;hideOre(o);snd.brk();
+ _v.set(o.x,o.y+.3,o.z);burst(_v,new THREE.Color(STONES[o.t].col).getHex(),8,4);
+ var st={id:S.nid++,t:o.t,w:randW(o.t),q:randQ(),seed:Math.floor(Math.random()*1e6),p:new Array(NV).fill(0),d:new Array(NV).fill(1),done:false,washed:false};
+ S.stones.push(st);
+ var dd=STONES[o.t],rt=ratio(st);S.codex[o.t]=S.codex[o.t]||1;
+ if(!stOf('wash'))S.wid=st.id;
+ popText((st.q!==1?'['+QUAL[st.q].n+'] ':'')+(rt>=1.5?'大物！ ':rt<=.6?'小粒 ':'')+dd.n+' '+kg(st)+' ゲット','#'+new THREE.Color(st.q>=2?QUAL[st.q].col:dd.col).getHexString());
+ syncAll();save();hud();}
 
 // ===== プレイヤー =====
 var P={x:0,y:0,z:8,vy:0,on:false,yaw:0,pitch:0};
-function solidAt(x,y,z){
- if(y>=0)return false;
- var gx=Math.floor(x-X0),gz=Math.floor(z-Z0);
- if(gx<0||gx>=PW||gz<0||gz>=PW)return true;
- var d=Math.floor(-y);if(d>=PD)return true;
- return grid[gi(gx,d,gz)]!==0;}
-var HS=[.05,.9,1.65],HW=.3;
-function collides(x,y,z){
- for(var a=-1;a<=1;a+=2)for(var b=-1;b<=1;b+=2)for(var h=0;h<3;h++)if(solidAt(x+a*HW,y+HS[h],z+b*HW))return true;
- for(var i=0;i<COLS.length;i++){var c=COLS[i];if(y<c.h-.05&&x>c.x0-HW&&x<c.x1+HW&&z>c.z0-HW&&z<c.z1+HW)return true;}
- return false;}
-function floorHit(x,y,z){return solidAt(x-HW,y-1e-4,z-HW)||solidAt(x+HW,y-1e-4,z-HW)||solidAt(x-HW,y-1e-4,z+HW)||solidAt(x+HW,y-1e-4,z+HW);}
+function groundH(x,z){var h=heightAt(x,z),a=heightAt(x+.25,z),b=heightAt(x-.25,z),c=heightAt(x,z+.25),d=heightAt(x,z-.25);return Math.max(h,a,b,c,d);}
+function colsHit(x,z,y){for(var i=0;i<COLS.length;i++){var c=COLS[i];if(y<c.h-.05&&x>c.x0-.3&&x<c.x1+.3&&z>c.z0-.3&&z<c.z1+.3)return true;}return false;}
 var stepT=0,bob=0;
 function stepPlayer(dt,mx,mz,jump,sprint){
  var sp=sprint?7.5:4.6,s=Math.sin(P.yaw),c=Math.cos(P.yaw);
  var wx=(mx*c+mz*s)*sp,wz=(-mx*s+mz*c)*sp; // mz: 前=-1
  var ox=P.x,oz=P.z;
- var nx=P.x+wx*dt;
- if(!collides(nx,P.y,P.z))P.x=nx;else if(P.on&&!collides(nx,P.y+1.05,P.z))P.vy=7;
- var nz=P.z+wz*dt;
- if(!collides(P.x,P.y,nz))P.z=nz;else if(P.on&&!collides(P.x,P.y+1.05,nz))P.vy=7;
+ var nx=P.x+wx*dt;if(!colsHit(nx,P.z,P.y))P.x=nx;
+ var nz=P.z+wz*dt;if(!colsHit(P.x,nz,P.y))P.z=nz;
+ var gh=groundH(P.x,P.z);
  if(jump&&P.on){P.vy=7;P.on=false;}
  P.vy=Math.max(-30,P.vy-20*dt);
- var ny=P.y+P.vy*dt,wasOn=P.on;P.on=false;
- if(P.vy<=0){
-  if(floorHit(P.x,ny,P.z)){P.y=Math.ceil(ny-1e-6);if(!wasOn&&P.vy<-8)snd.step();P.vy=0;P.on=true;}else P.y=ny;
- }else{
-  if(collides(P.x,ny,P.z))P.vy=0;else P.y=ny;}
- if(P.y<-32){P.x=0;P.y=0;P.z=8;P.vy=0;}
- P.x=Math.max(-55,Math.min(55,P.x));P.z=Math.max(-55,Math.min(55,P.z));
+ var ny=P.y+P.vy*dt,wasOn=P.on,glue=(wasOn&&P.vy<=0)?.4:0;P.on=false;
+ if(ny<=gh+glue){if(!wasOn&&P.vy<-8)snd.step();P.y=gh;P.vy=0;P.on=true;}else P.y=ny;
+ if(P.y<-45){P.x=0;P.y=0;P.z=8;P.vy=0;}
+ P.x=Math.max(-58,Math.min(58,P.x));P.z=Math.max(-58,Math.min(58,P.z));
  var moved=Math.hypot(P.x-ox,P.z-oz)/dt;
  if(P.on&&moved>1){bob+=dt*(sprint?13:9);stepT-=dt;if(stepT<=0){stepT=sprint?.3:.42;snd.step();}}
 }
-function surfaceReturn(){P.x=0;P.y=0;P.z=-6;P.vy=0;P.yaw=0;toast('地上に戻った');}
+function surfaceReturn(){P.x=0;P.y=0;P.z=-5;P.vy=0;P.yaw=0;toast('地上に戻った');}
 
 // ===== 入力 =====
 var keys={},touchMode=('ontouchstart' in window)&&matchMedia('(pointer:coarse)').matches,menuOn=false,started=false,acting=false,rmb=null,joy={x:0,y:0},jumpBtn=false,mouse=new THREE.Vector2(0,0),mouseIn=false;
+var _ray=new THREE.Raycaster(),_c0=new THREE.Vector2(0,0);
+var locked=false;
 if(touchMode)document.body.classList.add('touch');else cv.style.cursor='crosshair';
-function tryLock(){ac();if(AC&&AC.state==='suspended')AC.resume();started=true;document.getElementById('start').style.display='none';}
+function tryLock(){ac();if(AC&&AC.state==='suspended')AC.resume();started=true;document.getElementById('start').style.display='none';
+ if(!touchMode){try{var pr=cv.requestPointerLock();if(pr&&pr.catch)pr.catch(function(){});}catch(e){}}}
+document.addEventListener('pointerlockchange',function(){
+ locked=document.pointerLockElement===cv;
+ if(locked){cv.style.cursor='none';}
+ else{cv.style.cursor='crosshair';acting=false;rmb=null;
+  if(started&&!menuOn&&!touchMode){var st=document.getElementById('start');st.style.display='flex';st.querySelector('p').innerHTML='クリックで再開';}}});
 document.getElementById('start').addEventListener('click',tryLock);
 cv.addEventListener('mouseenter',function(){mouseIn=true;});cv.addEventListener('mouseleave',function(){mouseIn=false;});
 function setMouse(e){mouseIn=true;var r=cv.getBoundingClientRect();mouse.x=((e.clientX-r.left)/r.width)*2-1;mouse.y=-((e.clientY-r.top)/r.height)*2+1;}
+function stoneMeshes(){return [PL.polish.mesh,PL.wash.mesh].filter(Boolean);}
+var _ac=new THREE.Vector3();
+function aimStone(){ // 小さい石でもねらいやすいよう、まわりも少しあまく当たりにする
+ var h=_ray.intersectObjects(stoneMeshes())[0];if(h)return h;
+ var o=_ray.ray.origin,d=_ray.ray.direction,best=null,bd=1e9,ms=stoneMeshes();
+ for(var i=0;i<ms.length;i++){
+  var m=ms[i],r=m.geometry.boundingSphere.radius*m.scale.x,t=(m.position.x-o.x)*d.x+(m.position.y-o.y)*d.y+(m.position.z-o.z)*d.z;
+  if(t<0||t>4.5)continue;
+  _ac.set(o.x+d.x*t-m.position.x,o.y+d.y*t-m.position.y,o.z+d.z*t-m.position.z);var l=_ac.length();
+  if(l<r*1.9&&l<bd){bd=l;if(l>1e-4)_ac.multiplyScalar(r*.85/l);else _ac.set(0,r*.85,0);best={object:m,point:_ac.clone().add(m.position)};}}
+ return best;}
 cv.addEventListener('mousedown',function(e){if(touchMode)return;setMouse(e);
  if(e.button===0)acting=true;
- if(e.button===2){_ray.setFromCamera(mouse,camera);rmb=(benchMesh&&_ray.intersectObject(benchMesh).length)?'stone':'look';}});
+ if(e.button===2){_ray.setFromCamera(locked?_c0:mouse,camera);_ray.far=4.5;var h=aimStone();rmb=h?{mesh:h.object}:{};}});
 addEventListener('mouseup',function(e){if(e.button===0)acting=false;if(e.button===2)rmb=null;});
 cv.addEventListener('contextmenu',function(e){e.preventDefault();});
 addEventListener('mousemove',function(e){
  if(touchMode)return;if(e.target===cv)setMouse(e);
  if(menuOn)return;
- if(rmb==='stone'&&benchMesh){benchMesh.rotation.y+=e.movementX*.01;benchMesh.rotation.x+=e.movementY*.01;}
- else if(rmb==='look'){P.yaw-=e.movementX*.004;P.pitch=Math.max(-1.5,Math.min(1.5,P.pitch-e.movementY*.004));}});
+ if(rmb&&rmb.mesh){rmb.mesh.rotation.y+=e.movementX*.01;rmb.mesh.rotation.x+=e.movementY*.01;}
+ else if(locked||rmb){P.yaw-=e.movementX*.0025;P.pitch=Math.max(-1.5,Math.min(1.5,P.pitch-e.movementY*.0025));}});
 addEventListener('keydown',function(e){
  if(e.code==='Tab'){e.preventDefault();menuOn?G.close():openMenu('bag');return;}
  if(e.code==='Escape'&&menuOn){G.close();return;}
@@ -512,7 +690,6 @@ addEventListener('keydown',function(e){
  if(e.code==='KeyR')surfaceReturn();
  if(e.code==='Space'||e.code.indexOf('Arrow')===0)e.preventDefault();});
 addEventListener('keyup',function(e){keys[e.code]=false;});
-// タッチ（視点ドラッグ・スティック・ボタン）
 var look=null;
 cv.addEventListener('pointerdown',function(e){if(!touchMode||menuOn)return;look={id:e.pointerId,x:e.clientX,y:e.clientY};});
 cv.addEventListener('pointermove',function(e){if(!look||look.id!==e.pointerId)return;
@@ -533,25 +710,27 @@ addEventListener('pointerup',function(e){if(look&&look.id===e.pointerId)look=nul
 document.getElementById('menubtn').onclick=function(){menuOn?G.close():openMenu('bag');};
 
 // ===== 場所との会話 =====
-var STN=[{k:'bench',n:'作業台（かばん）',x:BENCH.x,z:BENCH.z,tab:'bag'},{k:'shop',n:'お店・道具屋',x:SHOP.x,z:SHOP.z,tab:'shop'},{k:'jew',n:'ジュエリー店（依頼）',x:JEW.x,z:JEW.z,tab:'req'}];
+var STN=[{k:'wash',n:'洗い場',x:WASHP.x,z:WASHP.z,tab:'bag'},{k:'bench',n:'磨き台（かばん）',x:BENCH.x,z:BENCH.z,tab:'bag'},{k:'shop',n:'お店・道具屋',x:SHOP.x,z:SHOP.z,tab:'shop'},{k:'jew',n:'ジュエリー店（依頼）',x:JEW.x,z:JEW.z,tab:'req'}];
 function nearStation(){var best=null,bd=3.4;STN.forEach(function(s){if(s.k==='jew'&&!S.reqOn)return;var d=Math.hypot(P.x-s.x,P.z-s.z);if(d<bd){bd=d;best=s;}});return best;}
 function interact(){var s=nearStation();if(s)openMenu(s.tab);}
 
 // ===== 依頼 =====
-var REQMUL={perfect:10,half:7,heavy:14};
+var REQMUL={perfect:10,half:7,heavy:14,fine:16};
 function reqText(r){var n=STONES[r.t].n;
  if(r.kind==='perfect')return '「'+n+'」を ツヤ90%以上・磨きすぎなしで';
  if(r.kind==='half')return '「'+n+'」を 半分くらい（ツヤ40〜65%）だけ磨いて。原石の風合いを残したい';
+ if(r.kind==='fine')return '品質が「美しい」以上の「'+n+'」を ツヤ80%以上で';
  return '平均より重い（1.4倍以上）「'+n+'」を ツヤ70%以上で';}
 function qualifies(st,r){
  if(st.t!==r.t)return false;var s=stats(st);
  if(r.kind==='perfect')return s.avg>=.9&&s.over<=.02;
  if(r.kind==='half')return s.avg>=.4&&s.avg<=.65&&s.over<=.02;
+ if(r.kind==='fine')return st.q>=2&&s.avg>=.8&&s.over<=.03;
  return ratio(st)>=1.4&&s.avg>=.7&&s.over<=.03;}
 function reqReward(r,st){return Math.round(STONES[r.t].price*REQMUL[r.kind]*(st?ratio(st):1));}
 function genReq(){
- var L=PICKS[S.pick].layer,c=[];STONES.forEach(function(s,i){if(s.layer<=Math.min(5,L+1)&&s.layer>=Math.max(1,L-1))c.push(i);});
- var t=c[Math.floor(Math.random()*c.length)],q=Math.random(),kind=q<.5?'perfect':q<.8?'half':'heavy';
+ var L=PICKS[S.pick].layer,c=[];STONES.forEach(function(s,i){if(s.layer<=Math.min(NL,L+1)&&s.layer>=Math.max(1,L-1))c.push(i);});
+ var t=c[Math.floor(Math.random()*c.length)],q=Math.random(),kind=q<.35?'perfect':q<.6?'half':q<.8?'heavy':'fine';
  S.reqs.push({id:S.rid++,t:t,kind:kind});
  snd.req();toast('💎 ジュエリー店から依頼が届きました！（Tab → 依頼）');save();if(menuOn)render();}
 var reqTimer=20;
@@ -560,10 +739,9 @@ function checkUnlock(){if(!S.reqOn&&S.earned>=UNLOCK_EARNED){S.reqOn=true;jew.vi
 // ===== メニュー =====
 var tab='bag';
 var TABS=[['bag','🎒 かばん'],['shop','🛒 道具屋'],['req','💎 依頼'],['codex','📚 図鑑']];
-function openMenu(t){menuOn=true;tab=t||tab;acting=false;rmb=false;try{document.exitPointerLock();}catch(e){}
+function openMenu(t){menuOn=true;tab=t||tab;acting=false;rmb=null;try{document.exitPointerLock();}catch(e){}
  document.getElementById('menu').style.display='flex';document.getElementById('start').style.display='none';render();}
-function closeMenu(){menuOn=false;document.getElementById('menu').style.display='none';
- if(!touchMode)tryLock();}
+function closeMenu(){menuOn=false;document.getElementById('menu').style.display='none';if(!touchMode)tryLock();}
 function item(n,d,cost,fn){return '<div class="row"><span>'+n+'<small>'+d+'</small></span><button class="b" '+(S.gold>=cost?'':'disabled')+' onclick="G.'+fn+'()">'+fmt(cost)+'G</button></div>';}
 function clothCost(){return Math.round(50*Math.pow(1.6,S.cloth));}
 function bagCost(){return 200*Math.pow(2,S.bag);}
@@ -573,14 +751,16 @@ function render(){
  document.getElementById('mtabs').innerHTML=t;
  var h='';
  if(tab==='bag'){
-  h+='<p style="margin:2px 0 6px;font-size:12px;opacity:.85">石は「作業台へ」で磨き台に置き、洗ってから磨きます。汚れが半分以下に落ちていない石は売れません。売値は重さに比例し、磨きすぎると石がやせて下がります。</p>';
-  if(!S.stones.length)h+='<p>石がありません。穴を掘って、結晶がのぞいているブロックを探そう。</p>';
-  S.stones.forEach(function(s){var st=stats(s),on=s.id===S.bench;
-   h+='<div class="row"><span><i class="dot" style="background:'+STONES[s.t].col+'"></i>'+sname(s)+(on?' 🔧':'')+'<small>重さ ×'+ratio(s).toFixed(2)+'（平均 '+STONES[s.t].avg+'kg）／ '+(st.dirt>.02?'汚れ '+Math.floor(st.dirt*100)+'% ／ ':'')+'ツヤ '+Math.floor(st.avg*100)+'%'+(st.over>.005?' ／ 磨きすぎ '+Math.floor(st.over*100)+'%':'')+'</small></span><span class="acts"><button class="b sub" onclick="G.bench('+s.id+')"'+(on?' disabled':'')+'>作業台へ</button><button class="b" '+(canSell(s)?'':'disabled ')+'onclick="G.sell('+s.id+')">'+(canSell(s)?fmt(value(s))+'G':'汚れが多い')+'</button></span></div>';});
+  h+='<p style="margin:2px 0 6px;font-size:12px;opacity:.85">掘った石は「洗い場」で洗い、「磨き台」で磨きます。汚れが半分以下に落ちていない石は売れません。売値は重さと品質で変わり、磨きすぎると石がやせて下がります。</p>';
+  if(!S.stones.length)h+='<p>石がありません。地面を掘って、のぞいている結晶を探そう。</p>';
+  S.stones.forEach(function(s){var st=stats(s),onW=s.id===S.wid,onP=s.id===S.bench;
+   h+='<div class="row"><span><i class="dot" style="background:'+STONES[s.t].col+'"></i><span style="color:'+QUAL[s.q].col+'">'+sname(s)+'</span>'+(onW?' 🧼':'')+(onP?' 🔧':'')+'<small>重さ ×'+ratio(s).toFixed(2)+'（平均 '+STONES[s.t].avg+'kg）／ '+(st.dirt>.02?'汚れ '+Math.floor(st.dirt*100)+'% ／ ':'')+'ツヤ '+Math.floor(st.avg*100)+'%'+(st.over>.005?' ／ 磨きすぎ '+Math.floor(st.over*100)+'%':'')+'</small></span><span class="acts"><button class="b sub" onclick="G.toWash('+s.id+')"'+(onW?' disabled':'')+'>洗い場へ</button><button class="b sub" onclick="G.toPolish('+s.id+')"'+(onP?' disabled':'')+'>磨き台へ</button><button class="b" '+(canSell(s)?'':'disabled ')+'onclick="G.sell('+s.id+')">'+(canSell(s)?fmt(value(s))+'G':'汚れが多い')+'</button></span></div>';});
   if(S.stones.length)h+='<div class="row"><span></span><button class="b sub" onclick="G.sellAll()">全部売る</button></div>';
  }else if(tab==='shop'){
   if(S.pick<PICKS.length-1){var np=PICKS[S.pick+1];h+=item(np.n,'力 '+np.pow+'／'+LAYERS[np.layer-1].n+'まで掘れる',np.cost,'buyPick');}
   else h+='<div class="row"><span>つるはしは最強！</span></div>';
+  if(S.wash<WASHERS.length-1){var nw=WASHERS[S.wash+1];h+=item('洗う道具：'+nw.n,'いまは'+WASHERS[S.wash].n+'。洗う速さ ×'+(nw.rate/WASHERS[S.wash].rate).toFixed(1)+'・範囲が広がる',nw.cost,'buyWash');}
+  else h+='<div class="row"><span>洗う道具は最強！（'+WASHERS[S.wash].n+'）</span></div>';
   h+=item('磨き布 Lv'+(S.cloth+1),'磨く速さアップ',clothCost(),'buyCloth');
   h+=item('かばん Lv'+(S.bag+1),'容量 '+cap()+' → '+(cap()+5),bagCost(),'buyBag');
   h+='<div class="row"><span></span><button class="b sub" onclick="G.reset()">最初から</button></div>';
@@ -600,23 +780,24 @@ function buy(cost,fn){if(S.gold<cost)return;S.gold-=cost;fn();snd.buy();save();r
 function earn(v){S.gold+=v;S.earned+=v;checkUnlock();}
 window.G={
  tab:function(t){tab=t;render();},close:closeMenu,
- bench:function(id){S.bench=id;syncBench();save();render();},
+ toWash:function(id){place(id,'wash');save();render();},
+ toPolish:function(id){place(id,'polish');save();render();},
  sell:function(id){
   var i=S.stones.findIndex(function(s){return s.id===id;});if(i<0)return;
   if(!canSell(S.stones[i])){toast('汚れが半分以上残っていて売れない。先に洗おう');return;}
-  var v=value(S.stones[i]);earn(v);S.stones.splice(i,1);snd.coin();popText('+'+fmt(v)+'G','#ffd84a');
-  if(S.bench===id){S.bench=S.stones.length?S.stones[0].id:0;}syncBench();save();render();},
- sellAll:function(){var tot=0,keep=[];S.stones.forEach(function(s){if(canSell(s))tot+=value(s);else keep.push(s);});
+  var v=value(S.stones[i]);earn(v);S.stones.splice(i,1);unplace(id);snd.coin();popText('+'+fmt(v)+'G','#ffd84a');save();render();},
+ sellAll:function(){var tot=0,keep=[],sold=[];S.stones.forEach(function(s){if(canSell(s)){tot+=value(s);sold.push(s.id);}else keep.push(s);});
   if(!tot){toast('洗ってから売ろう（汚れを半分以下に）');return;}
-  var n=S.stones.length-keep.length;earn(tot);S.stones=keep;if(!benchStone())S.bench=keep.length?keep[0].id:0;syncBench();if(keep.length)toast(n+'個売った。汚れが多い'+keep.length+'個は残した');snd.coin();popText('+'+fmt(tot)+'G','#ffd84a');save();render();},
+  earn(tot);S.stones=keep;sold.forEach(unplace);if(keep.length)toast(sold.length+'個売った。汚れが多い'+keep.length+'個は残した');snd.coin();popText('+'+fmt(tot)+'G','#ffd84a');save();render();},
  buyPick:function(){var p=PICKS[S.pick+1];buy(p.cost,function(){S.pick++;tintPick();toast(p.n+'を手に入れた！ '+LAYERS[p.layer-1].n+'まで掘れる');});},
- buyCloth:function(){buy(clothCost(),function(){S.cloth++;});},
+ buyWash:function(){var w=WASHERS[S.wash+1];buy(w.cost,function(){S.wash++;toast(w.n+'に持ちかえた！');});},
+ buyCloth:function(){buy(clothCost(),function(){S.cloth++;tintCloth();});},
  buyBag:function(){buy(bagCost(),function(){S.bag++;});},
  deliver:function(rid,sid){
   var ri=S.reqs.findIndex(function(r){return r.id===rid;}),si=S.stones.findIndex(function(s){return s.id===sid;});
   if(ri<0||si<0)return;var r=S.reqs[ri],st=S.stones[si];if(!qualifies(st,r))return;
-  var rw=reqReward(r,st);earn(rw);S.reqs.splice(ri,1);S.stones.splice(si,1);if(S.bench===sid){S.bench=S.stones.length?S.stones[0].id:0;}
-  syncBench();snd.coin();popText('依頼達成！ +'+fmt(rw)+'G','#ffd84a');reqTimer=15+Math.random()*20;save();render();},
+  var rw=reqReward(r,st);earn(rw);S.reqs.splice(ri,1);S.stones.splice(si,1);unplace(sid);
+  snd.coin();popText('依頼達成！ +'+fmt(rw)+'G','#ffd84a');reqTimer=15+Math.random()*20;save();render();},
  reset:function(){if(confirm('最初からやり直しますか？')){localStorage.removeItem(SAVE);location.reload();}}
 };
 function hud(){
@@ -626,7 +807,7 @@ function hud(){
  document.getElementById('codexc').textContent='📚 '+Object.keys(S.codex).length+'/'+STONES.length;}
 
 // ===== メインループ =====
-var clock=new THREE.Clock(),hitT=0,saveT=0,infoT=0,_ray=new THREE.Raycaster(),_c0=new THREE.Vector2(0,0),_dir=new THREE.Vector3(),_lp=new THREE.Vector3(),_bg=new THREE.Color();
+var clock=new THREE.Clock(),hitT=0,saveT=0,infoT=0,_dir=new THREE.Vector3(),_lp=new THREE.Vector3(),_bg=new THREE.Color(),_o=new THREE.Vector3();
 var promptEl=document.getElementById('prompt'),infoEl=document.getElementById('polinfo');
 function loop(){
  requestAnimationFrame(loop);
@@ -635,57 +816,63 @@ function loop(){
  if(play){
   var mx=joy.x,mz=(keys.KeyS||keys.ArrowDown?1:0)-(keys.KeyW||keys.ArrowUp?1:0)+joy.y;
   P.yaw+=((keys.KeyA||keys.ArrowLeft?1:0)-(keys.KeyD||keys.ArrowRight?1:0))*2*dt;
-  if(!touchMode&&mouseIn&&!rmb){ // 画面の端にマウスを寄せると向きが変わる
-   var ex=Math.abs(mouse.x)>.6?(Math.abs(mouse.x)-.6)/.4*Math.sign(mouse.x):0,ey=Math.abs(mouse.y)>.65?(Math.abs(mouse.y)-.65)/.35*Math.sign(mouse.y):0;
-   P.yaw-=ex*2.2*dt;P.pitch=Math.max(-1.5,Math.min(1.5,P.pitch+ey*1.6*dt));}
   var l=Math.hypot(mx,mz);if(l>1){mx/=l;mz/=l;}
   stepPlayer(dt,mx,mz,keys.Space||jumpBtn,keys.ShiftLeft||keys.ShiftRight);
  }
  camera.position.set(P.x,P.y+1.6+(P.on?Math.sin(bob)*.03:0),P.z);camera.rotation.set(P.pitch,P.yaw,0);camera.updateMatrixWorld();
- // 光（影つきの太陽。穴の中は自然に暗くなる）
+ // 光（影つきの太陽。深い穴の底は暗くなる）
  var f=Math.max(.15,Math.min(1,1+(P.y+1)/10));
  hemi.intensity=.4*f+.05;
  sun.position.set(P.x+30,P.y+50,P.z+20);sun.target.position.set(P.x,P.y,P.z);
  _bg.copy(DARK).lerp(HORIZ,f);scene.background.copy(_bg);scene.fog.color.copy(_bg);scene.fog.near=f<.5?4:35;scene.fog.far=f<.5?34:120;
  skyM.uniforms.bot.value.copy(_bg);skyM.uniforms.top.value.copy(DARK).lerp(TOPC,f);sky.position.copy(camera.position);
  // 狙い
- var target='none',bi=-1,sh=null;
+ var target='none',sh=null,shKind=null,th=null,oh=null;
  if(play){
-  
-  _ray.setFromCamera(touchMode?_c0:mouse,camera);_ray.far=4.5;_dir.copy(_ray.ray.direction);
-  sh=benchMesh?_ray.intersectObject(benchMesh)[0]:null;
-  if(sh)target='stone';
-  else{bi=voxelRay(camera.position.x,camera.position.y,camera.position.z,_dir.x,_dir.y,_dir.z,5.5);if(bi>=0)target='block';}
-  pickG.visible=target!=='stone';clothM.visible=target==='stone';
+  _ray.setFromCamera(touchMode||locked?_c0:mouse,camera);_ray.far=4.5;_dir.copy(_ray.ray.direction);_o.copy(_ray.ray.origin);
+  sh=aimStone();
+  if(sh){target='stone';shKind=sh.object===PL.wash.mesh?'wash':'polish';}
+  else{
+   th=terrainRay(_o,_dir,6);oh=oreRay(_o,_dir,6);
+   if(oh&&(!th||oh.t<=th.t+.3)){target='ore';}
+   else if(th&&inDigField(th.x,th.z)){target='terrain';}
+  }
+  window.__tgt=target+':'+shKind;var tool=target==='stone'?(shKind==='wash'?'wash':'polish'):'dig';
+  pickG.visible=tool==='dig';clothM.visible=tool==='polish';
+  for(var wi=0;wi<toolWash.length;wi++)toolWash[wi].visible=tool==='wash'&&wi===S.wash;
   if(acting){
    if(target==='stone'){
-    _lp.copy(sh.point);benchMesh.worldToLocal(_lp);
-    if(nearDirt(_lp,.6)>.05){washAt(_lp,3*dt,sh.point);clothM.material.color.setHex(0xe8d04a);}
-    else{polishAt(_lp,(1.4+.45*S.cloth)*dt);clothM.material.color.setHex(0x2f5fa0);}
-    clothM.position.x=.18+Math.sin(performance.now()*.02)*.05;
-   }else if(target==='block'){hitT-=dt;if(hitT<=0){hitT=.24;hitBlock(bi);}}
+    var T2=PL[shKind];_lp.copy(sh.point);T2.mesh.worldToLocal(_lp);
+    if(shKind==='wash'){var W=WASHERS[S.wash];washAt(_lp,W.rate*dt,sh.point);toolWash[S.wash].position.x=.28+Math.sin(performance.now()*.02)*.04;}
+    else{polishAt(_lp,(1.4+.45*S.cloth)*dt);clothM.position.x=.18+Math.sin(performance.now()*.02)*.05;}
+   }else if(target==='ore'){hitT-=dt;if(hitT<=0){hitT=.24;hitOre(oh.ore);}}
+   else if(target==='terrain'){hitT-=dt;if(hitT<=0){hitT=.24;digHit(th);}}
   }else hitT=0;
  }
- if(target==='block'){blockCenter(bi,hl.position);hl.visible=true;}else hl.visible=false;
+ if(target==='terrain'){var stp=Math.min(1,PICKS[S.pick].pow/(.34*LAYERS[layerAtDepth(-heightAt(th.x,th.z))].hp));ring.position.set(th.x,th.y+.06,th.z);ring.scale.setScalar(1.5+.6*stp);ring.material.color.setHex(0xffffff);ring.visible=true;}
+ else if(target==='ore'){ring.position.set(oh.ore.x,oh.ore.y+.1,oh.ore.z);ring.scale.setScalar(.7);ring.material.color.setHex(0xffc040);ring.visible=true;}
+ else ring.visible=false;
  if(swing>0)swing=Math.max(0,swing-dt*5);
  pickG.rotation.x=.2-swing;
- if(benchMesh){benchMesh.rotation.y+=dt*(acting&&target==='stone'?.25:.4);var sh2=benchMesh.material.userData.sh;if(sh2)sh2.uniforms.uTime.value=T;}
+ ['polish','wash'].forEach(function(k){var m=PL[k].mesh;if(m){m.rotation.y+=dt*(acting&&target==='stone'&&shKind===k?.25:.4);var s2=m.material.userData.sh;if(s2)s2.uniforms.uTime.value=T;}});
+ grassU.uTime.value=T;
  for(var i=parts.length-1;i>=0;i--){var m=parts[i],u=m.userData;u.life-=dt;u.v.y-=14*dt;m.position.addScaledVector(u.v,dt);m.scale.setScalar(Math.max(.01,u.life*1.4));
   if(u.life<=0){scene.remove(m);parts.splice(i,1);}}
  if(S.reqOn&&S.reqs.length<3){reqTimer-=dt;if(reqTimer<=0){reqTimer=25+Math.random()*20;genReq();}}
  infoT-=dt;
  if(infoT<=0){infoT=.1;
   var dep=Math.max(0,Math.floor(-P.y));
-  document.getElementById('depth').textContent='⬇ '+dep+'m（'+LAYERS[Math.min(4,Math.floor(Math.min(dep,PD-1)/LD))].n+'）';
+  document.getElementById('depth').textContent='⬇ '+dep+'m（'+LAYERS[layerAtDepth(dep)].n+'）';
   var ns=play?nearStation():null;
   if(ns){promptEl.style.display='block';promptEl.textContent='E：'+ns.n+'を開く';}
   else if(play&&P.y<-1.5){promptEl.style.display='block';promptEl.textContent='R：地上へ戻る';}
   else promptEl.style.display='none';
-  var st=benchStone();
-  if(st&&Math.hypot(P.x-BENCH.x,P.z-BENCH.z)<6){
-   var s=stats(st),ov=s.over>.005;
+  var dw=Math.hypot(P.x-WASHP.x,P.z-WASHP.z),dp=Math.hypot(P.x-BENCH.x,P.z-BENCH.z),k2=dw<dp?'wash':'polish',st=stOf(k2);
+  if(st&&Math.min(dw,dp)<6){
+   var s=stats(st),ov=s.over>.005,head='<b style="color:'+QUAL[st.q].col+'">'+sname(st)+'</b>（平均の×'+ratio(st).toFixed(2)+'）<br>';
    infoEl.style.display='block';
-   infoEl.innerHTML='<b>'+STONES[st.t].n+'</b> '+kg(st)+'（平均の×'+ratio(st).toFixed(2)+'）<br>売値 '+fmt(value(st))+'G　汚れ '+Math.floor(s.dirt*100)+'%　ツヤ '+Math.floor(s.avg*100)+'%<div class="bar"><i style="width:'+(s.avg*100)+'%;background:linear-gradient(90deg,#6ad,#fff)"></i></div>磨きすぎ '+Math.floor(s.over*100)+'%'+(ov?' ⚠':'')+'<div class="bar"><i style="width:'+Math.min(100,s.over*300)+'%;background:#e5503a"></i></div><small>汚れは先に洗う。同じ所をこすり続けると石がやせます</small>';
+   if(k2==='wash')infoEl.innerHTML='🧼 <b>洗い場</b>　'+head+'汚れ '+Math.floor(s.dirt*100)+'%<div class="bar"><i style="width:'+(s.dirt*100)+'%;background:#a8703a"></i></div><small>'+WASHERS[S.wash].n+'で洗おう。汚れが落ちたら磨き台へ運ばれます</small>';
+   else infoEl.innerHTML='🔧 <b>磨き台</b>　'+head+'売値 '+fmt(value(st))+'G　汚れ '+Math.floor(s.dirt*100)+'%　ツヤ '+Math.floor(s.avg*100)+'%<div class="bar"><i style="width:'+(s.avg*100)+'%;background:linear-gradient(90deg,#6ad,#fff)"></i></div>磨きすぎ '+Math.floor(s.over*100)+'%'+(ov?' ⚠':'')+'<div class="bar"><i style="width:'+Math.min(100,s.over*300)+'%;background:#e5503a"></i></div><small>同じ所をこすり続けると石がやせます</small>';
   }else infoEl.style.display='none';
  }
  saveT+=dt;if(saveT>6){saveT=0;save();}
@@ -693,9 +880,9 @@ function loop(){
 }
 function resize(){renderer.setSize(innerWidth,innerHeight);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();}
 addEventListener('resize',resize);resize();
-tintPick();syncBench();hud();if(S.reqOn)jew.visible=true;
-if(touchMode)document.querySelector('#start p').innerHTML='タップで開始<br>左スティックで移動、画面ドラッグで視点<br>右のボタンで掘る・磨く';
-window.__g={P:P,S:S,grid:grid,oreT:oreT,STONES:STONES,hitBlock:hitBlock,polishAt:polishAt,openMenu:openMenu,earn:earn,qualifies:qualifies,stats:stats,value:value,genReq:genReq,randW:randW,syncBench:syncBench};
+tintPick();tintCloth();syncAll();hud();if(S.reqOn)jew.visible=true;
+if(touchMode)document.querySelector('#start p').innerHTML='タップで開始<br>左スティックで移動、画面ドラッグで視点<br>右のボタンで掘る・洗う・磨く';
+window.__g={P:P,S:S,H:H,ORES:ORES,STONES:STONES,PL:PL,heightAt:heightAt,dent:dent,digHit:digHit,hitOre:hitOre,mineOre:mineOre,polishAt:polishAt,washAt:washAt,place:place,syncAll:syncAll,openMenu:openMenu,earn:earn,qualifies:qualifies,stats:stats,value:value,genReq:genReq,randW:randW,randQ:randQ};
 loop();
 })();
 </script>
